@@ -76,15 +76,19 @@ export class MatchingStack extends cdk.Stack {
     props.data.matchQueue.grantConsumeMessages(this.worker);
 
     // Bedrock: invoke the Titan embedding model + the Claude inference profile.
-    // Inference-profile invocation also needs invoke on the underlying foundation
-    // model ARNs it routes to, so we grant InvokeModel broadly on bedrock resources in
-    // this account/region (prototype scope). RATIONALE ADR-018.
+    // IMPORTANT: the Claude `au.` profile is a CROSS-REGION inference profile — it may
+    // route the actual invocation to any region in the Australia group (e.g.
+    // ap-southeast-2 Sydney OR ap-southeast-4 Melbourne). Invoking a profile requires
+    // InvokeModel on BOTH the profile ARN AND the underlying foundation-model ARN in
+    // whichever region it routes to. So the foundation-model resource must span regions
+    // (arn:aws:bedrock:*::foundation-model/*), not just the deploy region — otherwise a
+    // cross-region hop yields AccessDenied. RATIONALE ADR-018/025.
     this.worker.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['bedrock:InvokeModel'],
         resources: [
-          `arn:aws:bedrock:${this.region}::foundation-model/*`,
-          `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/*`,
+          'arn:aws:bedrock:*::foundation-model/*', // any region the profile routes to
+          `arn:aws:bedrock:*:${this.account}:inference-profile/*`,
         ],
       })
     );

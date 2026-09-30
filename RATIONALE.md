@@ -572,3 +572,36 @@ raise the concurrency limit via Service Quotas, then set the worker's reserved c
 methodology and is worth stating in the evaluation section (a real cloud gotcha), rather
 than hidden. It does not affect correctness — matching, claims, and notifications all
 work; only sustained high-concurrency throughput is capped.
+
+---
+
+## ADR-025: Bedrock IAM must span regions for cross-region inference profiles
+
+**What:** The matching worker's `bedrock:InvokeModel` permission grants the
+foundation-model resource across ALL regions (`arn:aws:bedrock:*::foundation-model/*`),
+not just the deploy region, plus the inference-profile ARN across regions.
+
+**Why (bug found enabling the photo path):** The Claude model is invoked via the `au.`
+*cross-region inference profile*, which load-balances the actual invocation across the
+Australia region group — it routed to `ap-southeast-4` (Melbourne) even though the stack
+is deployed in `ap-southeast-2` (Sydney). Invoking an inference profile requires
+`InvokeModel` on both the profile ARN and the underlying foundation-model ARN *in
+whichever region the profile routes to*. The original policy scoped the foundation-model
+ARN to the deploy region only, so the cross-region hop produced
+`AccessDeniedException ... on resource arn:aws:bedrock:ap-southeast-4::foundation-model/...`.
+The photo→description step silently failed (found items with only a photo got no
+description → no embedding → no match) while text-only matching kept working.
+
+**Alternatives considered:**
+- **Pin to a single-region (non-profile) model id** — avoids the cross-region issue, but
+  newer Claude models on Bedrock require an inference profile for on-demand invocation
+  (plain model-id invoke is rejected), so this isn't available.
+- **Enumerate the exact profile regions** — more precise, but brittle if AWS changes the
+  profile's region set; the wildcard region on the foundation-model resource (still scoped
+  to the `bedrock:InvokeModel` action and this account for profiles) is acceptable for the
+  prototype.
+
+**Why chosen:** Cross-region inference profiles are the only supported way to call the
+chosen Claude model, so the IAM must cover the regions they can route to. Verified live:
+a photo-only found item now gets a Claude-generated description, is embedded, and matches
+(score 0.79). See `scripts/verify_photo_match.sh`.

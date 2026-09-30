@@ -72,6 +72,7 @@ Legend: `TODO` / `WIP` / `DONE`
 | — | SES real email delivery | DONE (verified sender + live email verified) |
 | — | Code comments pass | DONE (frontend api/portals + eval metrics enriched) |
 | — | RUNBOOK.md (deploy-to-any-account guide) | DONE (14-section runbook + troubleshooting) |
+| — | Both Bedrock models fully live | DONE — Anthropic gate cleared; photo→desc→match verified (ADR-025 cross-region IAM fix) |
 | 14 | System performance and cost measurement tooling | DONE (load test + cost report, live numbers) |
 | 15 | Finalisation — working files and reproducible seed | DONE |
 
