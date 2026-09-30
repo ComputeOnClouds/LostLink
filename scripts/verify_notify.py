@@ -9,8 +9,8 @@
 4. Assert the lost item stored ownerEmail.
 
 Actual SES delivery requires a verified sender; if SENDER_EMAIL is the placeholder the
-worker claims-but-skips-send (still exercises dedup). Delivery to the mailbox simulator
-is covered by scripts/verify_notify_email.sh once a real sender is verified.
+worker claims-but-skips-send (still exercises dedup). Real delivery is covered by
+scripts/verify_email_live.sh once a sender is verified.
 """
 import json
 import os
