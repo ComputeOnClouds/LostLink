@@ -99,31 +99,47 @@ install `python3-venv` (`sudo apt-get install -y python3-venv`).
 
 ---
 
-## 4. Enable Amazon Bedrock model access (account-specific)
+## 4. Enable Amazon Bedrock models (account-specific)
 
-Matching uses two Bedrock models. **Model access is per-account and per-region** and must
-be enabled in the console before the worker can call them.
+Matching uses two Bedrock models. **The old "Model access" console page is retired** —
+serverless foundation models now auto-enable on first invocation. Two caveats remain:
+Anthropic needs a one-time use-case form, and IAM must span regions for the Claude
+inference profile.
 
-1. AWS Console → **Bedrock** (in YOUR region) → **Model access**.
-2. Enable:
-   - **Amazon Titan Text Embeddings V2** (`amazon.titan-embed-text-v2:0`) — REQUIRED for
-     matching. Amazon models usually enable instantly.
-   - **Anthropic Claude** (a Haiku model) — OPTIONAL, only for the photo→description
-     feature. Anthropic models require filling a short **"use case details"** form; access
-     can take a few minutes to a few hours.
-3. Newer Claude models must be invoked via a **regional inference profile**, not the plain
-   model id. Find yours:
+1. **Amazon Titan Text Embeddings V2** (`amazon.titan-embed-text-v2:0`) — REQUIRED for
+   matching. Auto-enables on first use; nothing to do.
+2. **Anthropic Claude Haiku 4.5** (`anthropic.claude-haiku-4-5-20251001-v1:0`) — for the
+   photo→description feature. First-time Anthropic use needs a **"use case details"**
+   form:
+   - AWS Console → **Bedrock** (YOUR region) → **Model catalog** → open **Claude Haiku
+     4.5** → **Open in Playground** → send one test message. If the form is required, the
+     playground presents it; fill it (Education / course project / short item-photo
+     descriptions, low volume) and submit. One successful playground response = enabled.
+   - Approval is usually quick; a fresh account may say "try again in 15 minutes".
+3. Claude must be invoked via a **regional inference profile** (plain on-demand model-id
+   invoke is rejected). Find yours:
    ```bash
    aws bedrock list-inference-profiles --region <your-region> \
      --query "inferenceProfileSummaries[?contains(inferenceProfileId,'claude')].inferenceProfileId" \
      --output text
    ```
-   The prefix is regional: `au.` in ap-southeast-2, `apac.`/`us.`/`eu.` elsewhere. Set the
-   right id via the `DESCRIBE_MODEL_ID` env var on the worker (or edit
-   `backend/pipeline/impl/description.py`'s default) if it differs from the built-in
-   `au.anthropic.claude-haiku-4-5-20251001-v1:0`.
+   The prefix is regional (`au.` in ap-southeast-2; `apac.`/`us.`/`eu.` elsewhere). If
+   yours differs from the built-in `au.anthropic.claude-haiku-4-5-20251001-v1:0`, set it
+   via the worker's `DESCRIBE_MODEL_ID` env var or edit the default in
+   `backend/pipeline/impl/description.py`.
+4. **Cross-region IAM (already handled in code, ADR-025):** the `au.` profile is
+   *cross-region* and may route the call to another Australia region (e.g.
+   ap-southeast-4). The worker's IAM therefore allows `bedrock:InvokeModel` on
+   `arn:aws:bedrock:*::foundation-model/*`. If you use a different profile family, no
+   change is needed — the wildcard region already covers it.
 
-**Text matching works with Titan alone.** If you skip Claude, just have staff type a
+Verify both models live once deployed:
+```bash
+bash scripts/verify_bedrock_vision.sh    # Titan embed + Claude vision
+bash scripts/verify_photo_match.sh       # full photo → description → match (post-deploy)
+```
+
+**Text matching works with Titan alone.** If you skip Claude, staff just type a
 description when registering found items (photos still upload and display).
 
 > **New-account note:** a brand-new AWS account may return
@@ -295,8 +311,10 @@ SES console.)
 |---------|-------------|
 | `cdk bootstrap` needed | Run step 5 for your account+region. |
 | Deploy fails, wrong region | CLI region ≠ CDK region. Align them (step 2.2). |
-| Matching produces no match | Titan model access not enabled (step 4), or the found item has no text (staff uploaded only a photo but Claude access isn't enabled). |
+| Matching produces no match | Titan not usable yet, or a photo-only found item whose Claude description step failed (check worker logs; see the two rows below). |
+| Worker error `use case details have not been submitted` | Submit the Anthropic use-case form via Bedrock → Model catalog → Playground (step 4.2). |
 | Worker error `on-demand throughput isn't supported` | Claude needs a regional **inference profile** id, not the plain model id (step 4.3). |
+| Worker `AccessDenied ... InvokeModel on arn:aws:bedrock:<other-region>::foundation-model/...` | The cross-region inference profile routed to another region; IAM must span regions (step 4.4 / ADR-025). Already fixed in code — redeploy `LostLink-Matching`. |
 | `MessageRejected: not verified` (email) | SES sandbox: verify sender and recipient, or request production access (step 8). |
 | HTTP 503 under load | Account Lambda concurrency limit (step 11 note). |
 | Presigned upload returns 307 | Handled in code (regional endpoint + SigV4); if you see it, confirm the bucket region matches your deploy region. |

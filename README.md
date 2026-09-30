@@ -66,10 +66,15 @@ stay hidden from the claimant until staff verify ownership.
 - Node.js 18+ and npm (CDK app + frontend)
 - Python 3.12+ (Lambda code + eval harness)
 - AWS CDK CLI via `npx cdk` (installed as an infra dev-dependency; no global install)
-- **Amazon Bedrock model access** in your region:
+- **Amazon Bedrock model access** in your region (auto-enabled on first use; the console
+  "Model access" page is retired):
   - Amazon Titan Text Embeddings (`amazon.titan-embed-text-v2:0`) — required for matching
-  - Anthropic Claude (Haiku, via the regional inference profile) — for photo→description;
-    requires the Anthropic "use case details" form in the Bedrock console
+  - Anthropic Claude Haiku 4.5 (`anthropic.claude-haiku-4-5-20251001-v1:0`, invoked via
+    the regional inference profile, e.g. `au.` in ap-southeast-2) — for photo→description.
+    First-time Anthropic use requires submitting the "use case details" form (reachable
+    from the Bedrock **Model catalog → Playground**). The worker's IAM must allow
+    `bedrock:InvokeModel` across regions because the profile is cross-region (see ADR-025).
+  - Both models are enabled and working on the reference deployment.
 - **Amazon SES**: a verified sender identity; in the SES sandbox, verified recipients too
   (or use the mailbox simulator `success@simulator.amazonses.com`)
 
@@ -95,8 +100,9 @@ bash scripts/verify_backend.sh   # creates backend/.venv, installs, runs unit te
 # 3. Bootstrap CDK (once per account/region)
 cd infra && npx cdk bootstrap && cd ..
 
-# 4. Enable Bedrock model access (Bedrock console): Titan Text Embeddings + Claude.
-#    (Claude needs the Anthropic use-case form; Titan is enough for text matching.)
+# 4. Bedrock: models auto-enable on first use. Titan is enough for text matching; for
+#    photo→description, first-time Anthropic use needs the use-case form (Bedrock →
+#    Model catalog → Claude Haiku 4.5 → Playground → run once). See RUNBOOK step 4.
 
 # 5. Verify an SES sender identity (SES console → Identities). In sandbox, also verify
 #    any recipient address you want to actually receive mail.
@@ -167,7 +173,8 @@ cd backend && . .venv/bin/activate && python3 -m pytest -q   # full suite (52 te
 bash scripts/verify_data.sh              # DynamoDB repo + presigned S3
 bash scripts/verify_api_reports.sh       # individual reporting API (auth, ownership)
 bash scripts/verify_api_staff.sh         # staff inventory (org boundary, roles)
-bash scripts/verify_matching.sh          # end-to-end async matching
+bash scripts/verify_matching.sh          # end-to-end async matching (text)
+bash scripts/verify_photo_match.sh       # photo → Claude description → embed → match
 bash scripts/verify_notify.sh            # notification dedup (exactly-once)
 bash scripts/verify_claims_individual.sh # individual claims + privacy gate
 bash scripts/verify_claims_staff.sh      # staff review → approve → reserve → handover
