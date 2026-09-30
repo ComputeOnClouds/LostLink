@@ -1,0 +1,14 @@
+{
+  "lost": [
+    {"id": "l-wallet", "description": "black leather wallet red stripe", "locationZone": "zone-library", "eventTime": "2026-09-10T09:00:00+00:00", "truth": "f-wallet", "vecText": [1.0, 0.0, 0.0]},
+    {"id": "l-bottle", "description": "yellow hydro flask panda sticker", "locationZone": "zone-gym", "eventTime": "2026-09-11T09:00:00+00:00", "truth": "f-bottle", "vecText": [0.0, 1.0, 0.0]},
+    {"id": "l-umbrella", "description": "blue umbrella wooden handle", "locationZone": "zone-bus-stop", "eventTime": "2026-09-12T09:00:00+00:00", "truth": "f-umbrella", "vecText": [0.0, 0.0, 1.0]},
+    {"id": "l-nomatch", "description": "rare antique brass compass", "locationZone": "zone-canteen", "eventTime": "2026-09-13T09:00:00+00:00", "truth": null, "vecText": [0.577, 0.577, 0.577]}
+  ],
+  "found": [
+    {"id": "f-wallet", "description": "dark leather wallet with red stripe", "locationZone": "zone-library", "eventTime": "2026-09-10T15:00:00+00:00", "vecText": [0.98, 0.1, 0.0]},
+    {"id": "f-bottle", "description": "yellow flask panda decal dented lid", "locationZone": "zone-gym", "eventTime": "2026-09-11T15:00:00+00:00", "vecText": [0.1, 0.98, 0.0]},
+    {"id": "f-umbrella", "description": "blue umbrella brass tip wood handle", "locationZone": "zone-bus-stop", "eventTime": "2026-09-12T15:00:00+00:00", "vecText": [0.0, 0.1, 0.98]},
+    {"id": "f-distractor", "description": "green backpack broken zip", "locationZone": "zone-canteen", "eventTime": "2026-09-14T15:00:00+00:00", "vecText": [-0.5, -0.5, 0.2]}
+  ]
+}

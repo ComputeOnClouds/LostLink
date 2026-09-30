@@ -1,0 +1,4 @@
+# Runtime deps for Lambda code.
+# boto3 is provided by the Lambda runtime but pinned here for local dev/tests.
+boto3>=1.34.0
+numpy>=1.26.0
