@@ -66,15 +66,15 @@ stay hidden from the claimant until staff verify ownership.
 - Node.js 18+ and npm (CDK app + frontend)
 - Python 3.12+ (Lambda code + eval harness)
 - AWS CDK CLI via `npx cdk` (installed as an infra dev-dependency; no global install)
-- **Amazon Bedrock model access** in your region (auto-enabled on first use; the console
-  "Model access" page is retired):
-  - Amazon Titan Text Embeddings (`amazon.titan-embed-text-v2:0`) — required for matching
+- **Amazon Bedrock model access** in your region:
+  - Amazon Titan Text Embeddings (`amazon.titan-embed-text-v2:0`) — required for matching;
+    available immediately.
   - Anthropic Claude Haiku 4.5 (`anthropic.claude-haiku-4-5-20251001-v1:0`, invoked via
     the regional inference profile, e.g. `au.` in ap-southeast-2) — for photo→description.
-    First-time Anthropic use requires submitting the "use case details" form (reachable
-    from the Bedrock **Model catalog → Playground**). The worker's IAM must allow
-    `bedrock:InvokeModel` across regions because the profile is cross-region (see ADR-025).
-  - Both models are enabled and working on the reference deployment.
+    Get access via the Bedrock **Model catalog → Claude Haiku 4.5 → Playground**, which
+    prompts for the one-time Anthropic "use case details" form on first use. The worker's
+    IAM allows `bedrock:InvokeModel` across regions because the profile is cross-region
+    (see ADR-025).
 - **Amazon SES**: a verified sender identity; in the SES sandbox, verified recipients too
   (or use the mailbox simulator `success@simulator.amazonses.com`)
 
@@ -100,9 +100,9 @@ bash scripts/verify_backend.sh   # creates backend/.venv, installs, runs unit te
 # 3. Bootstrap CDK (once per account/region)
 cd infra && npx cdk bootstrap && cd ..
 
-# 4. Bedrock: models auto-enable on first use. Titan is enough for text matching; for
-#    photo→description, first-time Anthropic use needs the use-case form (Bedrock →
-#    Model catalog → Claude Haiku 4.5 → Playground → run once). See RUNBOOK step 4.
+# 4. Bedrock access: Titan is available immediately (enough for text matching). For
+#    photo→description, get Claude via Bedrock → Model catalog → Claude Haiku 4.5 →
+#    Playground → run once (submit the Anthropic use-case form). See RUNBOOK step 4.
 
 # 5. Verify an SES sender identity (SES console → Identities). In sandbox, also verify
 #    any recipient address you want to actually receive mail.

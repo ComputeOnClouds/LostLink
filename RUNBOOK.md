@@ -101,20 +101,18 @@ install `python3-venv` (`sudo apt-get install -y python3-venv`).
 
 ## 4. Enable Amazon Bedrock models (account-specific)
 
-Matching uses two Bedrock models. **The old "Model access" console page is retired** —
-serverless foundation models now auto-enable on first invocation. Two caveats remain:
-Anthropic needs a one-time use-case form, and IAM must span regions for the Claude
-inference profile.
+Matching uses two Bedrock models. Enable them in YOUR account/region before deploying.
 
 1. **Amazon Titan Text Embeddings V2** (`amazon.titan-embed-text-v2:0`) — REQUIRED for
-   matching. Auto-enables on first use; nothing to do.
+   matching. Available immediately on first use; nothing to do.
 2. **Anthropic Claude Haiku 4.5** (`anthropic.claude-haiku-4-5-20251001-v1:0`) — for the
-   photo→description feature. First-time Anthropic use needs a **"use case details"**
-   form:
+   photo→description feature. To get access:
    - AWS Console → **Bedrock** (YOUR region) → **Model catalog** → open **Claude Haiku
-     4.5** → **Open in Playground** → send one test message. If the form is required, the
-     playground presents it; fill it (Education / course project / short item-photo
-     descriptions, low volume) and submit. One successful playground response = enabled.
+     4.5** → **Open in Playground** → send one test message.
+   - On first use of an Anthropic model you'll be asked to submit a short **"use case
+     details"** form; fill it (Education / course project / short item-photo descriptions,
+     low volume) and submit. Once a playground message returns a response, access is
+     granted.
    - Approval is usually quick; a fresh account may say "try again in 15 minutes".
 3. Claude must be invoked via a **regional inference profile** (plain on-demand model-id
    invoke is rejected). Find yours:
