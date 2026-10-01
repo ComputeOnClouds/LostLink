@@ -26,10 +26,11 @@ _DEFAULT_MODEL = "au.anthropic.claude-haiku-4-5-20251001-v1:0"
 # A tight prompt: produce a compact, matchable description, no chit-chat. Consistent
 # phrasing across items improves text-similarity matching (RATIONALE ADR-003).
 _PROMPT = (
-    "You are cataloguing a lost-and-found item from its photo. In 1-2 sentences, "
-    "describe only the item: its type/category, main colours, brand or visible text, "
-    "material, and any distinctive marks. Do not describe the background or guess "
-    "personal details. Output the description only."
+    "Describe this lost-and-found item in ONE short sentence (max ~20 words), the way an "
+    "owner would describe it: type of object, main colour(s), brand or visible text, "
+    "material, and any distinctive marks. Do NOT add a heading, title, label, preamble, "
+    "markdown, bullet points, or quotes. Do NOT describe the background. Reply with the "
+    "plain description sentence only, e.g. 'black leather bifold wallet with a red stripe'."
 )
 
 _MEDIA_TYPES = {
@@ -38,6 +39,33 @@ _MEDIA_TYPES = {
     "png": "image/png",
     "webp": "image/webp",
 }
+
+
+def _clean_description(text: str) -> str:
+    """Normalise a model description into a single plain phrase.
+
+    Defensive against the model occasionally adding a Markdown heading, a leading label
+    (e.g. "Description:"), surrounding quotes, or extra lines — any of which dilute the
+    embedding and hurt matching against short user-typed text. We keep the first
+    meaningful line, strip markdown/label/quote noise, and collapse whitespace.
+    """
+    import re
+
+    lines = [ln.strip() for ln in (text or "").splitlines()]
+    # Drop markdown headings and empty lines; keep the first real content line.
+    content = ""
+    for ln in lines:
+        if not ln or ln.startswith("#"):
+            continue
+        content = ln
+        break
+    if not content:
+        content = (text or "").strip()
+    content = content.lstrip("-*• ").strip()
+    # Strip a leading label like "Description:" / "Item:".
+    content = re.sub(r"^[A-Z][A-Za-z /-]{0,30}:\s*", "", content)
+    content = content.strip().strip('"').strip("'").strip()
+    return re.sub(r"\s+", " ", content)
 
 
 class ClaudeDescriptionSource(DescriptionSource):
@@ -115,4 +143,4 @@ class ClaudeDescriptionSource(DescriptionSource):
         payload = json.loads(resp["body"].read())
         # Claude messages API returns content blocks; concatenate any text blocks.
         parts = [b.get("text", "") for b in payload.get("content", []) if b.get("type") == "text"]
-        return " ".join(p for p in parts if p).strip()
+        return _clean_description(" ".join(p for p in parts if p))

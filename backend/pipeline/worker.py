@@ -4,7 +4,7 @@ Depends only on the stage interfaces (obtained from the factory). The full
 orchestration is filled in across Tasks 7-10; the skeleton here fixes the shape and
 the wiring so those tasks slot in without changing the worker's dependencies.
 
-See ARCHITECTURE.md section 2.1 for the orchestration sequence.
+See docs/ARCHITECTURE.md section 2.1 for the orchestration sequence.
 """
 
 from __future__ import annotations
@@ -18,7 +18,14 @@ from .interfaces import (
     Notifier,
     ItemRepository,
 )
-from .models import OrgScope, Item
+from .models import (
+    OrgScope,
+    Item,
+    ItemType,
+    STATUS_MATCHED,
+    STATUS_NO_MATCH,
+    INACTIVE_STATUSES,
+)
 from . import factory
 
 
@@ -64,15 +71,22 @@ class MatchWorker:
         4. Score each pair; persist matches at/above the profile threshold.
         5. Notify the report owner for new above-threshold matches (Task 10 dedup).
 
-        Withdrawn/closed items are skipped. See ARCHITECTURE.md section 2.1.
+        Withdrawn/closed items are skipped. See docs/ARCHITECTURE.md section 2.1.
         """
         item_id = job.get("itemId")
         if not item_id:
             print("job missing itemId; skipping")
             return
 
-        item = self.repository.get(item_id)
-        if item.status in ("withdrawn", "closed"):
+        # The referenced item may have been deleted between enqueue and processing (e.g.
+        # withdrawn + purged). Treat as nothing-to-do rather than failing the message.
+        try:
+            item = self.repository.get(item_id)
+        except KeyError:
+            print(f"{item_id} no longer exists; skipping")
+            return
+
+        if item.status in INACTIVE_STATUSES:
             print(f"{item_id} is {item.status}; skipping match")
             return
 
@@ -86,8 +100,9 @@ class MatchWorker:
         # Cross-organisation matching: search every authorised org's opposing inventory.
         candidates = self.retriever.retrieve(item, OrgScope(all_authorised=True))
 
+        match_count = 0
         for candidate in candidates:
-            if candidate.status in ("withdrawn", "closed"):
+            if candidate.status in INACTIVE_STATUSES:
                 continue
             if not candidate.vectors.has_text():
                 # Candidate not yet enriched; it will match when its own job runs.
@@ -98,13 +113,44 @@ class MatchWorker:
             result.profile_name = profile.name
 
             if result.score >= profile.threshold:
+                match_count += 1
                 # Orient the match so the query is always the lost report and the
                 # candidate the found item, regardless of which side triggered the job.
                 oriented = self._orient(item, candidate, result)
                 self.repository.save_match(oriented)
                 self._maybe_notify(oriented)
+                # Mark the LOST side of the pair as matched. When a LOST report triggered
+                # the job this is itself; when a FOUND item triggered, this flips the
+                # affected lost report(s) so their owners see the match too.
+                self._mark_report_matched(oriented.query_item_id, item)
+
+        # Set the triggering LOST report's final status (matched / no_match). Found items
+        # keep their own staff/claims-driven status (available/reserved/closed).
+        if item.item_type is ItemType.LOST:
+            new_status = STATUS_MATCHED if match_count > 0 else STATUS_NO_MATCH
+            if item.status != new_status:
+                item.status = new_status
+                self.repository.save(item)
+            print(f"{item_id}: {match_count} match(es) -> status {new_status}")
 
     # ---- helpers -------------------------------------------------------------------
+
+    def _mark_report_matched(self, lost_item_id: str, triggering_item: Item) -> None:
+        """Flip a lost report's status to 'matched'.
+
+        If the lost report is the item that triggered this job, it's updated by the
+        caller afterwards. If a FOUND item triggered the job, load the affected lost
+        report and set it to matched so its owner sees the result immediately.
+        """
+        if triggering_item.item_type is ItemType.LOST and lost_item_id == triggering_item.item_id:
+            return  # handled by the caller's final status update
+        try:
+            lost = self.repository.get(lost_item_id)
+        except KeyError:
+            return
+        if lost.status not in INACTIVE_STATUSES and lost.status != STATUS_MATCHED:
+            lost.status = STATUS_MATCHED
+            self.repository.save(lost)
 
     def _ensure_enriched(self, item: Item) -> Item:
         """Generate a description from a photo if needed, and cache embeddings."""

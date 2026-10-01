@@ -7,6 +7,7 @@
 import {
   CognitoUserPool,
   CognitoUser,
+  CognitoUserAttribute,
   AuthenticationDetails,
   CognitoUserSession,
 } from 'amazon-cognito-identity-js';
@@ -79,4 +80,61 @@ export function currentIdentity(cfg: RuntimeConfig): Promise<Identity | null> {
 
 export function signOut(cfg: RuntimeConfig): void {
   userPool(cfg).getCurrentUser()?.signOut();
+}
+
+/**
+ * Self-service registration. Creates an unconfirmed user in the pool; Cognito emails a
+ * verification code. The user is NOT assigned a role here — the pool's post-confirmation
+ * trigger adds confirmed, org-less users to the Individual group (see auth-stack.ts).
+ *
+ * Resolves to `true` when a confirmation code is required (the normal path), `false` if
+ * the pool auto-confirmed the user (no code step needed).
+ */
+export function signUp(
+  cfg: RuntimeConfig,
+  email: string,
+  password: string,
+): Promise<boolean> {
+  const attributes = [new CognitoUserAttribute({ Name: 'email', Value: email })];
+  return new Promise((resolve, reject) => {
+    userPool(cfg).signUp(email, password, attributes, [], (err, result) => {
+      if (err) {
+        reject(new Error(err.message || 'Sign-up failed'));
+        return;
+      }
+      resolve(result ? !result.userConfirmed : true);
+    });
+  });
+}
+
+/** Confirm a registration with the emailed code. */
+export function confirmSignUp(
+  cfg: RuntimeConfig,
+  email: string,
+  code: string,
+): Promise<void> {
+  const user = new CognitoUser({ Username: email, Pool: userPool(cfg) });
+  return new Promise((resolve, reject) => {
+    user.confirmRegistration(code.trim(), true, (err) => {
+      if (err) {
+        reject(new Error(err.message || 'Confirmation failed'));
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+/** Resend the verification code to the user's email. */
+export function resendCode(cfg: RuntimeConfig, email: string): Promise<void> {
+  const user = new CognitoUser({ Username: email, Pool: userPool(cfg) });
+  return new Promise((resolve, reject) => {
+    user.resendConfirmationCode((err) => {
+      if (err) {
+        reject(new Error(err.message || 'Could not resend code'));
+        return;
+      }
+      resolve();
+    });
+  });
 }

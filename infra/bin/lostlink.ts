@@ -3,7 +3,7 @@
  * LostLink CDK app entry point.
  *
  * Instantiates the six independent stacks and wires their cross-stack dependencies.
- * See ARCHITECTURE.md section 1.4 for the dependency graph.
+ * See docs/ARCHITECTURE.md section 1.4 for the dependency graph.
  */
 import * as cdk from 'aws-cdk-lib';
 import { config, resourceName } from '../lib/config';

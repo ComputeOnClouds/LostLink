@@ -5,6 +5,8 @@
  */
 import { useEffect, useState } from 'react';
 import { ApiClient, FoundItem, StaffClaim } from './api';
+import { nowLocal } from './time';
+import { itemStatusLabel, claimStateLabel } from './labels';
 
 export function StaffPortal({ api, organisationId }: { api: ApiClient; organisationId: string | null }) {
   const [items, setItems] = useState<FoundItem[]>([]);
@@ -28,6 +30,14 @@ export function StaffPortal({ api, organisationId }: { api: ApiClient; organisat
 
   return (
     <div className="grid">
+      {!organisationId && (
+        <div className="notice err">
+          Your staff account isn’t linked to an organisation yet. Email the LostLink admin
+          at <strong>satpathy.amrit@u.nus.edu</strong> to register your organisation and
+          get it linked to your account.
+        </div>
+      )}
+
       <ClaimReview api={api} />
 
       <div className="card">
@@ -59,7 +69,7 @@ export function StaffPortal({ api, organisationId }: { api: ApiClient; organisat
                 <div className="title">{it.description || '(photo-based item)'}</div>
                 <div className="meta">
                   {it.locationZone} · {it.eventTime?.slice(0, 10)} ·{' '}
-                  <span className={`badge ${it.status}`}>{it.status.replace('_', ' ')}</span>
+                  <span className={`badge ${it.status}`}>{itemStatusLabel(it.status)}</span>
                 </div>
                 {it.status !== 'withdrawn' && (
                   <div className="btn-row">
@@ -90,7 +100,8 @@ function ItemForm({
 }) {
   const [description, setDescription] = useState('');
   const [locationZone, setLocationZone] = useState('');
-  const [eventTime, setEventTime] = useState('');
+  // Prefill with the current local time; this exact value is submitted if left unchanged.
+  const [eventTime, setEventTime] = useState(nowLocal());
   const [photo, setPhoto] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +119,7 @@ function ItemForm({
       });
       setDescription('');
       setLocationZone('');
-      setEventTime('');
+      setEventTime(nowLocal());
       setPhoto(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Submit failed');
@@ -132,7 +143,7 @@ function ItemForm({
         <input value={locationZone} onChange={(e) => setLocationZone(e.target.value)} required placeholder="e.g. zone-central-library" />
       </label>
       <label className="field">
-        <span>Time found</span>
+        <span>Time found <span className="hint">(defaults to now — change it if you know when)</span></span>
         <input type="datetime-local" value={eventTime} onChange={(e) => setEventTime(e.target.value)} />
       </label>
       {error && <div className="notice err">{error}</div>}
@@ -198,7 +209,7 @@ function ClaimReview({ api }: { api: ApiClient }) {
           {claims.map((c) => (
             <li key={c.claimId} className="tile">
               <div>
-                <span className={`badge ${c.state}`}>{c.state.replace('_', ' ')}</span>{' '}
+                <span className={`badge ${c.state}`}>{claimStateLabel(c.state)}</span>{' '}
                 <span className="meta">claim {c.claimId.slice(0, 14)}…</span>
               </div>
               <div className="evidence">

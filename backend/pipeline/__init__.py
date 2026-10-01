@@ -15,7 +15,7 @@ Stages:
     Notifier           - notify a report owner of a match
     ItemRepository     - persistence boundary (hides DynamoDB)
 
-See ARCHITECTURE.md section 2 for the class-level interaction diagram and contracts.
+See docs/ARCHITECTURE.md section 2 for the class-level interaction diagram and contracts.
 """
 
 from .models import Item, ItemType, VectorMap, MatchResult, Profile, OrgScope

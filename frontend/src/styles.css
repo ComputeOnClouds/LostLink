@@ -154,6 +154,8 @@ button.sm { padding: 7px 12px; font-size: .85rem; }
   padding: 3px 9px; border-radius: 999px; background: #eef1f6; color: var(--muted);
 }
 .badge.pending_match, .badge.submitted { background: #eaf0ff; color: var(--brand-dark); }
+.badge.matched { background: #e2f6e9; color: var(--success); font-weight: 700; }
+.badge.no_match { background: #eceff4; color: #55607a; }
 .badge.available { background: #e7f6ec; color: var(--success); }
 .badge.info_requested { background: #fff2dd; color: var(--warn); }
 .badge.approved, .badge.reserved { background: #e7f6ec; color: var(--success); }
@@ -182,3 +184,12 @@ button.sm { padding: 7px 12px; font-size: .85rem; }
 .login-wrap h2 { margin-top: 0; }
 .seed-hint { font-size: .8rem; color: var(--muted); margin-top: 14px; line-height: 1.6; }
 .seed-hint code { background: #f0f2f7; padding: 1px 5px; border-radius: 5px; }
+
+/* ---- auth: register/login switch ---- */
+p.hint { font-size: .8rem; color: var(--muted); margin: -6px 0 12px; }
+.auth-switch { font-size: .88rem; color: var(--muted); margin-top: 14px; text-align: center; }
+.linklike {
+  background: none; border: none; padding: 0; width: auto;
+  color: var(--brand, #2a6df4); font: inherit; font-weight: 600; cursor: pointer;
+}
+.linklike:hover { text-decoration: underline; }

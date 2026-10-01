@@ -8,6 +8,7 @@ import { loadConfig, RuntimeConfig } from './config';
 import { Identity, currentIdentity, signIn, signOut } from './auth';
 import { ApiClient } from './api';
 import { Login } from './Login';
+import { Register } from './Register';
 import { IndividualPortal } from './IndividualPortal';
 import { StaffPortal } from './StaffPortal';
 
@@ -16,6 +17,7 @@ export function App() {
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
 
   useEffect(() => {
     loadConfig()
@@ -33,6 +35,12 @@ export function App() {
     setIdentity(id);
   }
 
+  // After a successful registration + confirmation, sign the new user straight in.
+  async function handleRegistered(email: string, password: string) {
+    await handleLogin(email, password);
+    setAuthScreen('login');
+  }
+
   function handleLogout() {
     if (cfg) signOut(cfg);
     setIdentity(null);
@@ -45,7 +53,15 @@ export function App() {
   if (!identity) {
     return (
       <Shell>
-        <Login onLogin={handleLogin} />
+        {authScreen === 'register' ? (
+          <Register
+            cfg={cfg}
+            onConfirmed={handleRegistered}
+            onBackToLogin={() => setAuthScreen('login')}
+          />
+        ) : (
+          <Login onLogin={handleLogin} onRegister={() => setAuthScreen('register')} />
+        )}
       </Shell>
     );
   }

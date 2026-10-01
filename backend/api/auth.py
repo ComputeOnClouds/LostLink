@@ -7,7 +7,7 @@ organisation from the request body/query — they come only from these validated
 This is the privacy core: a staff user's organisation is read from the token, so they
 cannot act on another org's data by tampering with the request.
 
-See ARCHITECTURE.md section 1.1 and RATIONALE ADR-010.
+See docs/ARCHITECTURE.md section 1.1 and RATIONALE ADR-010.
 """
 
 from __future__ import annotations

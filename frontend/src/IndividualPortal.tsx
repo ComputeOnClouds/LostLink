@@ -5,6 +5,8 @@
  */
 import { useEffect, useState } from 'react';
 import { ApiClient, Report, MatchSuggestion, Claim } from './api';
+import { nowLocal } from './time';
+import { reportStatusLabel, claimStateLabel } from './labels';
 
 export function IndividualPortal({ api }: { api: ApiClient }) {
   const [reports, setReports] = useState<Report[]>([]);
@@ -54,7 +56,7 @@ export function IndividualPortal({ api }: { api: ApiClient }) {
                 <div className="title">{r.description || '(photo-based report)'}</div>
                 <div className="meta">
                   {r.locationZone} · {r.eventTime?.slice(0, 10)} ·{' '}
-                  <span className={`badge ${r.status}`}>{r.status.replace('_', ' ')}</span>
+                  <span className={`badge ${r.status}`}>{reportStatusLabel(r.status)}</span>
                 </div>
                 {r.status !== 'withdrawn' && (
                   <div className="btn-row">
@@ -85,7 +87,8 @@ function ReportForm({
 }) {
   const [description, setDescription] = useState('');
   const [locationZone, setLocationZone] = useState('');
-  const [eventTime, setEventTime] = useState('');
+  // Prefill with the current local time; this exact value is submitted if left unchanged.
+  const [eventTime, setEventTime] = useState(nowLocal());
   const [photo, setPhoto] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +106,7 @@ function ReportForm({
       });
       setDescription('');
       setLocationZone('');
-      setEventTime('');
+      setEventTime(nowLocal());
       setPhoto(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Submit failed');
@@ -123,7 +126,7 @@ function ReportForm({
         <input value={locationZone} onChange={(e) => setLocationZone(e.target.value)} required placeholder="e.g. zone-central-library" />
       </label>
       <label className="field">
-        <span>Approx. time lost</span>
+        <span>Approx. time lost <span className="hint">(defaults to now — change it if you know when)</span></span>
         <input type="datetime-local" value={eventTime} onChange={(e) => setEventTime(e.target.value)} />
       </label>
       <label className="field">
@@ -212,7 +215,7 @@ function MatchesAndClaims({ api }: { api: ApiClient }) {
             <li key={c.claimId} className="tile">
               <div>
                 Claim to <strong>{c.organisationId}</strong> ·{' '}
-                <span className={`badge ${c.state}`}>{c.state.replace('_', ' ')}</span>
+                <span className={`badge ${c.state}`}>{claimStateLabel(c.state)}</span>
               </div>
               {c.item ? (
                 <div className="evidence">

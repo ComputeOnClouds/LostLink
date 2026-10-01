@@ -23,6 +23,32 @@ class ItemType(str, Enum):
         return ItemType.FOUND if self is ItemType.LOST else ItemType.LOST
 
 
+# ---- item status values -------------------------------------------------------------
+# A LOST report moves through a small lifecycle driven by the matching worker:
+#   PENDING_MATCH : created, not yet processed by the worker ("searching").
+#   MATCHED       : the worker found >=1 found-item above the score threshold.
+#   NO_MATCH      : the worker ran and found nothing above the threshold yet.
+#   WITHDRAWN     : the user withdrew the report.
+# (A report can cycle PENDING_MATCH -> MATCHED/NO_MATCH again if it is edited or if new
+# found items arrive and it is re-processed.)
+STATUS_PENDING_MATCH = "pending_match"
+STATUS_MATCHED = "matched"
+STATUS_NO_MATCH = "no_match"
+STATUS_WITHDRAWN = "withdrawn"
+
+# A FOUND item's lifecycle is driven by staff + the claims flow:
+#   AVAILABLE : registered and matchable.
+#   RESERVED  : an approved claimant is collecting it.
+#   CLOSED    : handed over.
+#   WITHDRAWN : staff removed it.
+STATUS_AVAILABLE = "available"
+STATUS_RESERVED = "reserved"
+STATUS_CLOSED = "closed"
+
+# Statuses that take an item out of matching (neither matched against nor re-matched).
+INACTIVE_STATUSES = {STATUS_WITHDRAWN, STATUS_CLOSED}
+
+
 @dataclass
 class VectorMap:
     """Named embedding vectors for an item.

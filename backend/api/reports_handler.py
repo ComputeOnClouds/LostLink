@@ -27,7 +27,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import boto3
 
-from pipeline.models import Item, ItemType, VectorMap
+from pipeline.models import (
+    Item, ItemType, VectorMap, STATUS_PENDING_MATCH, STATUS_WITHDRAWN,
+)
 from pipeline.impl.ddb_mapping import item_to_ddb, ddb_to_item, now_iso
 
 from .auth import principal_from_event, AuthError
@@ -85,7 +87,7 @@ def _create_report(principal, body) -> dict:
         event_time=body.get("eventTime") or now_iso(),
         photo_key=photo_key,
         vectors=VectorMap(),  # embeddings populated by the worker (Task 7/8)
-        status="pending_match",
+        status=STATUS_PENDING_MATCH,
     )
     _items().put_item(Item=item_to_ddb(item))
     _enqueue_match(item.item_id, item.item_type.value)
@@ -129,9 +131,9 @@ def _edit_report(principal, item_id, body) -> dict:
     if not item.description and not item.photo_key:
         return error(400, "Report must have a description or a photo.")
 
-    # Editing invalidates prior embeddings; clear so the worker recomputes.
+    # Editing invalidates prior embeddings; clear so the worker recomputes + re-ranks.
     item.vectors = VectorMap()
-    item.status = "pending_match"
+    item.status = STATUS_PENDING_MATCH
     _items().put_item(Item=item_to_ddb(item))
     _enqueue_match(item.item_id, item.item_type.value)
     return respond(200, _public_view(item))
@@ -140,7 +142,7 @@ def _edit_report(principal, item_id, body) -> dict:
 def _withdraw_report(principal, item_id) -> dict:
     principal.require_individual()
     item = _load_owned(principal, item_id)
-    item.status = "withdrawn"
+    item.status = STATUS_WITHDRAWN
     _items().put_item(Item=item_to_ddb(item))
     return respond(200, {"itemId": item.item_id, "status": item.status})
 

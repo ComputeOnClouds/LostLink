@@ -171,10 +171,13 @@ over-engineering the UI.
 
 ## ADR-009: Working files kept continuously up to date
 
-**What:** Maintain PROGRESS.md (resumability), RATIONALE.md (this file),
-ARCHITECTURE.md (interactions), README.md (how to run). Every task updates PROGRESS.md
-on completion; decisions append here; component/interaction changes update
-ARCHITECTURE.md; run/setup changes update README.md.
+**What:** Maintain RATIONALE.md (this file), ARCHITECTURE.md (interactions), README.md
+(how to run), FLOW.md + `docs/flows/` (how each flow works). Decisions append here;
+component/interaction changes update ARCHITECTURE.md; run/setup changes update README.md;
+flow changes update the flow docs.
+
+(During build a `PROGRESS.md` resumability log was also kept and updated per task; it was
+removed in the final cleanup pass since the durable documentation above supersedes it.)
 
 **Why:** A mid-build failure or a new session must be able to resume without
 re-deriving state or reasoning.
@@ -605,3 +608,48 @@ description → no embedding → no match) while text-only matching kept working
 chosen Claude model, so the IAM must cover the regions they can route to. Verified live:
 a photo-only found item now gets a Claude-generated description, is embedded, and matches
 (score 0.79). See `scripts/verify_photo_match.sh`.
+
+
+## ADR-026: Self-service registration for individuals via a post-confirmation trigger
+
+**Context:** Individuals (people who lost something) need to create their own accounts
+rather than being hand-provisioned. Cognito self sign-up was already enabled, but role in
+LostLink is carried by **group membership** (the `cognito:groups` claim), and Cognito
+does not place a self-signed-up user in any group. Without intervention a self-registered
+user would authenticate but have no role: the frontend couldn't route them and every
+Individual API call would 403 (`require_individual`).
+
+**Decision:** Add a Cognito **post-confirmation Lambda trigger**
+(`backend/api/post_confirmation.py`) that, on sign-up confirmation, adds the user to the
+`Individual` group — but only when the user has **no** `custom:organisationId`. Staff are
+admin-created with an organisation id and an explicit `Staff` group, so the trigger skips
+them and never downgrades a staff member. The frontend gains a two-step register/confirm
+flow (`Register.tsx`, `signUp`/`confirmSignUp`/`resendCode` in `auth.ts`); no role is
+chosen client-side.
+
+**Alternatives considered:**
+- **Let the browser assign the group** — impossible: the public SPA client has no
+  credentials to call `admin-add-user-to-group`, and letting clients self-assign roles
+  would be a privilege-escalation hole (a user could claim `Staff`).
+- **A `custom:role` attribute instead of groups** — rejected earlier (groups are the
+  single source of role, enforced in the JWT); re-deciding it here would fork the model.
+- **Pre-signup auto-confirm** (skip the email code) — weaker: email verification both
+  proves the address and is the channel for match notifications.
+
+**Why chosen:** The trigger is the only server-side hook that can safely assign the role
+after Cognito confirms the user, keeps role assignment entirely out of the client, and
+leaves the staff provisioning path untouched.
+
+**Implementation note — circular dependency:** scoping the trigger's
+`cognito-idp:AdminAddUserToGroup` permission to the specific user-pool ARN created a
+CloudFormation cycle (the pool depends on the trigger function; a pool-specific policy
+makes the function depend on the pool). Resolved by scoping the action to
+`arn:aws:cognito-idp:<region>:<account>:userpool/*` — the trigger only ever fires for this
+pool's own confirmations, so it is effectively pool-scoped at runtime. Verified end to end
+by `scripts/verify_registration.sh` (sign-up → confirm → `Individual` group → login → the
+ID token carries `cognito:groups=[Individual]` and no organisation).
+
+**Note on verification email:** Cognito sends the sign-up code via its built-in email
+sender (a per-day cap applies on the default sender). This is independent of the SES
+sandbox that gates LostLink's own match/claim notifications, so real self-registrations
+receive their confirmation code even while SES is in sandbox.

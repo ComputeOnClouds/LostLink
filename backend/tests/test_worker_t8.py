@@ -157,3 +157,51 @@ def test_worker_skips_withdrawn(monkeypatch):
     worker = _make_worker(repo, {})
     worker.handle({"itemId": "lost-1", "type": "lost"})
     assert repo.saved_matches == []
+
+
+# ---- report status lifecycle (pending_match -> matched / no_match) -----------------
+
+from pipeline.models import STATUS_MATCHED, STATUS_NO_MATCH, STATUS_PENDING_MATCH  # noqa: E402
+
+
+def test_report_status_becomes_matched(monkeypatch):
+    monkeypatch.setenv("MATCH_THRESHOLD", "0.7")
+    repo = FakeRepo()
+    repo.save(_lost(status=STATUS_PENDING_MATCH, vectors=VectorMap(text=[1.0, 0.0, 0.0])))
+    repo.save(_found(vectors=VectorMap(text=[1.0, 0.0, 0.0])))
+    worker = _make_worker(repo, {})
+    worker.handle({"itemId": "lost-1", "type": "lost"})
+    assert repo.get("lost-1").status == STATUS_MATCHED
+
+
+def test_report_status_becomes_no_match(monkeypatch):
+    monkeypatch.setenv("MATCH_THRESHOLD", "0.95")
+    repo = FakeRepo()
+    repo.save(_lost(status=STATUS_PENDING_MATCH, vectors=VectorMap(text=[1.0, 0.0, 0.0]),
+                    location_zone="z1"))
+    # orthogonal vector + different zone + far time -> below 0.95
+    repo.save(_found(vectors=VectorMap(text=[0.0, 1.0, 0.0]), location_zone="z9",
+                     event_time="2026-01-01T00:00:00+00:00"))
+    worker = _make_worker(repo, {})
+    worker.handle({"itemId": "lost-1", "type": "lost"})
+    assert repo.get("lost-1").status == STATUS_NO_MATCH
+
+
+def test_found_trigger_flips_affected_lost_report_to_matched(monkeypatch):
+    monkeypatch.setenv("MATCH_THRESHOLD", "0.7")
+    repo = FakeRepo()
+    repo.save(_lost(status=STATUS_PENDING_MATCH, vectors=VectorMap(text=[1.0, 0.0, 0.0])))
+    repo.save(_found(vectors=VectorMap(text=[1.0, 0.0, 0.0])))
+    worker = _make_worker(repo, {})
+    # a FOUND item triggers the job; the matching lost report should flip to matched
+    worker.handle({"itemId": "found-1", "type": "found"})
+    assert repo.get("lost-1").status == STATUS_MATCHED
+    # the found item keeps its own status (not matched/no_match)
+    assert repo.get("found-1").status == "available"
+
+
+def test_deleted_item_job_is_skipped_gracefully():
+    repo = FakeRepo()  # empty — item was purged
+    worker = _make_worker(repo, {})
+    worker.handle({"itemId": "lost-gone", "type": "lost"})  # must not raise
+    assert repo.saved_matches == []

@@ -12,7 +12,7 @@ Built for NUS CS5224 (Cloud Computing) group project.
 
 > **Live app:** https://dyhlyloz80360.cloudfront.net (deployed in `ap-southeast-2`)
 > **Public code repository:** _<add your Git URL here before submission>_
-> **Deploying into your own AWS account?** Follow [`RUNBOOK.md`](./RUNBOOK.md) — it has the
+> **Deploying into your own AWS account?** Follow [`RUNBOOK.md`](./docs/RUNBOOK.md) — it has the
 > ordered procedure plus the account-specific steps (region, Bedrock access, SES, Lambda
 > concurrency) and a troubleshooting table.
 
@@ -31,10 +31,13 @@ ComputeOnClouds/
 ├── frontend/         React (Vite) SPA (Individual + Staff portals) + styles
 ├── eval/             Evaluation harness (metrics, ground-truth gen, load test, cost)
 ├── scripts/          Deploy + live-verification + seed scripts
-├── RUNBOOK.md        Step-by-step deploy-to-any-AWS-account procedure + troubleshooting
-├── PROGRESS.md       Resumability log — build state, per-task detail
-├── RATIONALE.md      Decision record (ADRs) — what / why / alternatives
-├── ARCHITECTURE.md   Component interactions (architecture + class level, diagrams)
+├── docs/             All project docs:
+│   ├── FLOW.md           End-to-end flow overview + the two lifecycles; links per-flow docs
+│   ├── flows/           Per-flow deep-dives: authentication, organisation-access, matching,
+│   │                    notification, decision-and-status (code, files, how to change each)
+│   ├── RUNBOOK.md        Step-by-step deploy-to-any-AWS-account procedure + troubleshooting
+│   ├── RATIONALE.md      Decision record (ADRs) — what / why / alternatives
+│   └── ARCHITECTURE.md   Component interactions (architecture + class level, diagrams)
 └── README.md         This file
 ```
 
@@ -42,9 +45,10 @@ ComputeOnClouds/
 
 ## Architecture at a glance
 
-Fully serverless on AWS (see `ARCHITECTURE.md` for full diagrams):
+Fully serverless on AWS (see `docs/ARCHITECTURE.md` for full diagrams):
 
-- **Amazon Cognito** — auth; two groups (Individual, Staff); staff carry `organisationId`
+- **Amazon Cognito** — auth; two groups (Individual, Staff); self sign-up for individuals
+  (a post-confirmation Lambda assigns the Individual group); staff carry `organisationId`
 - **Amazon API Gateway (HTTP API)** — validates Cognito JWTs; routes to Lambdas
 - **AWS Lambda (Python 3.12)** — request handlers + async matching worker
 - **Amazon DynamoDB** — items (lost+found), claims, matches, organisations
@@ -148,12 +152,15 @@ Demo accounts:
 
 ## Run the frontend
 
-Open the CloudFront URL (the `LostLink-CloudFrontUrl` stack output) and sign in with a
-demo account. Walkthrough:
+Open the CloudFront URL (the `LostLink-CloudFrontUrl` stack output). Individuals can
+**self-register** from the login screen ("Create an account" → verify the emailed code),
+or you can sign in with a demo account below. Staff accounts are admin-provisioned (see
+`scripts/seed_demo.sh`). Walkthrough:
 
 1. As **staff**, register a found item (e.g. "black leather wallet, red stripe", zone
    `zone-library`).
-2. As an **individual** (separate browser/incognito), report the matching lost item.
+2. As an **individual** (self-registered, or a demo account in a separate
+   browser/incognito), report the matching lost item.
 3. Wait ~10s; refresh — a **potential match** appears (details hidden). Submit a claim
    with evidence.
 4. As **staff**, open Ownership claims → approve → reserve → handover. The claimant now
@@ -179,6 +186,7 @@ bash scripts/verify_notify.sh            # notification dedup (exactly-once)
 bash scripts/verify_claims_individual.sh # individual claims + privacy gate
 bash scripts/verify_claims_staff.sh      # staff review → approve → reserve → handover
 bash scripts/verify_frontend.sh          # deployed site + config + login
+bash scripts/verify_registration.sh      # self-registration → Individual group → login
 bash scripts/verify_email_live.sh        # REAL email send (needs a verified sender)
 ```
 
@@ -234,8 +242,8 @@ The `Scorer` is a **pure function** (no AWS deps) so the evaluation harness impo
 directly to sweep weights offline. Matching weights and the notification threshold are
 injected as Lambda env vars (`WEIGHT_TEXT/IMAGE/LOCATION/TIME`, `MATCH_THRESHOLD`).
 
-Design decisions and their alternatives are recorded as ADRs in `RATIONALE.md`
-(24 entries), and all component interactions are diagrammed in `ARCHITECTURE.md`.
+Design decisions and their alternatives are recorded as ADRs in `docs/RATIONALE.md`,
+and all component interactions are diagrammed in `docs/ARCHITECTURE.md`.
 
 ### API handlers (`backend/api/`)
 
@@ -247,7 +255,7 @@ Design decisions and their alternatives are recorded as ADRs in `RATIONALE.md`
 
 ### Infra (`infra/lib/`)
 
-Six independent CDK stacks with cross-stack references (see `ARCHITECTURE.md §1.4`):
+Six independent CDK stacks with cross-stack references (see `docs/ARCHITECTURE.md §1.4`):
 `AuthStack`, `DataStack` (tables + buckets + SQS), `ApiStack`, `MatchingStack` (worker),
 `NotificationStack`, `FrontendStack`.
 
@@ -259,6 +267,8 @@ Cognito. `IndividualPortal` and `StaffPortal` are role-gated on the `cognito:gro
 
 ### Working documents
 
-- `PROGRESS.md` — per-task status, deployed resource IDs, how to verify, deviations.
-- `RATIONALE.md` — architecture decision records (ADR-001…024).
-- `ARCHITECTURE.md` — architecture- and class-level interaction diagrams + contracts.
+- `docs/FLOW.md` — end-to-end flow overview + the two lifecycles; links to the per-flow docs.
+- `docs/flows/` — per-flow deep-dives (code, files, how to change each).
+- `docs/RATIONALE.md` — architecture decision records (ADRs).
+- `docs/ARCHITECTURE.md` — architecture- and class-level interaction diagrams + contracts.
+- `docs/RUNBOOK.md` — deploy-to-any-account procedure + troubleshooting.

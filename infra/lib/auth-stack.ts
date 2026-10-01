@@ -1,5 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
+import * as path from 'path';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import { LostLinkConfig, resourceName } from './config';
 
@@ -14,7 +17,7 @@ import { LostLinkConfig, resourceName } from './config';
  *  - a public SPA app client (no secret) supporting SRP and USER_PASSWORD auth flows.
  *
  * Exposes: userPoolId, userPoolClientId — consumed by ApiStack (JWT authorizer) and
- * FrontendStack (login config). See ARCHITECTURE.md section 1.1.
+ * FrontendStack (login config). See docs/ARCHITECTURE.md section 1.1.
  */
 export interface AuthStackProps extends cdk.StackProps {
   readonly config: LostLinkConfig;
@@ -60,6 +63,38 @@ export class AuthStack extends cdk.Stack {
       // Prototype: allow full teardown. Change to RETAIN for production.
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+
+    // ---- Post-confirmation trigger: self-registered users become Individuals -------
+    // Self sign-up creates a confirmed user with NO group; role in LostLink is group
+    // membership. This trigger adds org-less (self-registered) users to the Individual
+    // group so they can report lost items immediately. Staff are admin-provisioned with
+    // an organisationId and are skipped by the handler.
+    const postConfirmationFn = new lambda.Function(this, 'PostConfirmationFn', {
+      functionName: resourceName('PostConfirmation'),
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'api.post_confirmation.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', '..', 'backend'), {
+        exclude: ['.venv', 'tests', '**/__pycache__', '*.md', '.pytest_cache'],
+      }),
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+      environment: { INDIVIDUAL_GROUP: GROUP_INDIVIDUAL },
+    });
+    this.userPool.addTrigger(
+      cognito.UserPoolOperation.POST_CONFIRMATION,
+      postConfirmationFn
+    );
+    // Allow the trigger to add the confirmed user to a group. We scope to the account's
+    // user pools (not the specific pool ARN) to avoid a circular dependency: the pool
+    // depends on this function (its trigger) while a pool-specific policy would make the
+    // function depend on the pool. The trigger only ever fires for this pool's own
+    // confirmations, so this is effectively pool-scoped at runtime.
+    postConfirmationFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['cognito-idp:AdminAddUserToGroup'],
+        resources: [`arn:aws:cognito-idp:${this.region}:${this.account}:userpool/*`],
+      })
+    );
 
     this.userPoolClient = this.userPool.addClient('WebClient', {
       userPoolClientName: resourceName('WebClient'),

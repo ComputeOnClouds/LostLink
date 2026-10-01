@@ -29,8 +29,7 @@ Idle cost is ~$0. See `eval/cost_report.py` for the full breakdown.
 
 ## 1. Prerequisites (install once)
 
-You need these available in the shell you deploy from (this project was developed in
-**WSL Ubuntu**; if you use WSL, install these *inside* WSL, not on the Windows host):
+You need these available in the shell you deploy from :
 
 | Tool | Version | Check |
 |------|---------|-------|

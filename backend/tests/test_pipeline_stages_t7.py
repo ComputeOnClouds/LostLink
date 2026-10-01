@@ -11,7 +11,21 @@ import json
 
 from pipeline.models import Item, ItemType
 from pipeline.impl.embedder import TitanEmbedder
-from pipeline.impl.description import ClaudeDescriptionSource
+from pipeline.impl.description import ClaudeDescriptionSource, _clean_description
+
+
+def test_clean_description_strips_heading_label_quotes():
+    # Markdown heading + body -> just the body line.
+    assert _clean_description("# Lost-and-Found Item Description\nA blue leather wallet.") \
+        == "A blue leather wallet."
+    # Leading label removed.
+    assert _clean_description("Description: red umbrella") == "red umbrella"
+    # Surrounding quotes + whitespace collapsed.
+    assert _clean_description('  "black   backpack"  ') == "black backpack"
+    # Bullet marker removed.
+    assert _clean_description("- teal water bottle") == "teal water bottle"
+    # Plain text passes through.
+    assert _clean_description("silver watch") == "silver watch"
 
 
 class _Body:

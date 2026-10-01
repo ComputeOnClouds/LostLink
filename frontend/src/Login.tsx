@@ -1,6 +1,14 @@
 import { useState } from 'react';
 
-export function Login({ onLogin }: { onLogin: (email: string, password: string) => Promise<void> }) {
+export function Login({
+  onLogin,
+  onRegister,
+  notice,
+}: {
+  onLogin: (email: string, password: string) => Promise<void>;
+  onRegister: () => void;
+  notice?: string | null;
+}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -24,6 +32,7 @@ export function Login({ onLogin }: { onLogin: (email: string, password: string) 
       <div className="card">
         <h2>Sign in</h2>
         <p style={{ color: 'var(--muted)', marginTop: 0 }}>Access your reports, or your organisation’s inventory.</p>
+        {notice && <div className="notice ok">{notice}</div>}
         <form onSubmit={submit}>
           <label className="field">
             <span>Email</span>
@@ -38,10 +47,19 @@ export function Login({ onLogin }: { onLogin: (email: string, password: string) 
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+        <p className="auth-switch">
+          Lost something and new here?{' '}
+          <button type="button" className="linklike" onClick={onRegister}>
+            Create an account
+          </button>
+        </p>
         <div className="seed-hint">
           Demo accounts:<br />
           Individual — <code>user@lostlink.example</code> / <code>User!Pass123</code><br />
           Staff — <code>staff@lostlink.example</code> / <code>Staff!Pass123</code>
+          <br /><br />
+          Staff accounts for an organisation are provisioned by the LostLink admin
+          at <code>satpathy.amrit@u.nus.edu</code>.
         </div>
       </div>
     </div>
