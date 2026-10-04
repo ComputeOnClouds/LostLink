@@ -95,9 +95,22 @@ class ItemRepository(ABC):
         ...
 
     @abstractmethod
+    def save_if_revision(self, item: Item, expected_revision: int) -> bool:
+        """Save derived changes only if the user/API revision is still current."""
+        ...
+
+    @abstractmethod
     def list_candidates(self, query_item: Item, org_scope: OrgScope) -> list[Item]:
         ...
 
     @abstractmethod
     def save_match(self, match: MatchResult) -> None:
+        ...
+
+    @abstractmethod
+    def deactivate_matches_for_query(self, query_item_id: str) -> None:
+        ...
+
+    @abstractmethod
+    def deactivate_match(self, query_item_id: str, candidate_item_id: str) -> None:
         ...

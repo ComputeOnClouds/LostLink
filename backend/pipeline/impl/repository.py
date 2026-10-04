@@ -61,6 +61,23 @@ class DynamoItemRepository(ItemRepository):
         created_at = existing.get("createdAt") if existing else None
         self._items.put_item(Item=item_to_ddb(item, created_at=created_at))
 
+    def save_if_revision(self, item: Item, expected_revision: int) -> bool:
+        """Prevent an older worker job from overwriting a newer edit/withdrawal."""
+        existing = self._items.get_item(Key={"itemId": item.item_id}).get("Item")
+        if not existing:
+            return False
+        try:
+            self._items.put_item(
+                Item=item_to_ddb(item, created_at=existing.get("createdAt")),
+                ConditionExpression="(attribute_not_exists(revision) AND :expected = :zero) OR revision = :expected",
+                ExpressionAttributeValues={":expected": expected_revision, ":zero": 0},
+            )
+            return True
+        except Exception as exc:  # conditional failure means a newer user revision won
+            if "ConditionalCheckFailed" in type(exc).__name__ or "ConditionalCheckFailed" in str(exc):
+                return False
+            raise
+
     def list_candidates(self, query_item: Item, org_scope: OrgScope) -> list[Item]:
         """Return opposing-type items within the authorised org scope.
 
@@ -100,4 +117,60 @@ class DynamoItemRepository(ItemRepository):
         return [i for i in results if i.item_id != query_item.item_id]
 
     def save_match(self, match: MatchResult) -> None:
-        self._matches.put_item(Item=match_to_ddb(match))
+        key = {
+            "queryItemId": match.query_item_id,
+            "candidateItemId": match.candidate_item_id,
+        }
+        row = match_to_ddb(match)
+        self._matches.update_item(
+            Key=key,
+            UpdateExpression=(
+                "SET organisationId = :org, score = :score, profileName = :profile, "
+                "breakdown = :breakdown, active = :active, updatedAt = :updated, "
+                "createdAt = if_not_exists(createdAt, :created), "
+                "notified = if_not_exists(notified, :notified)"
+            ),
+            ExpressionAttributeValues={
+                ":org": row["organisationId"],
+                ":score": row["score"],
+                ":profile": row["profileName"],
+                ":breakdown": row["breakdown"],
+                ":active": True,
+                ":updated": row["createdAt"],
+                ":created": row["createdAt"],
+                ":notified": False,
+            },
+        )
+
+    def deactivate_matches_for_query(self, query_item_id: str) -> None:
+        response = self._matches.query(
+            KeyConditionExpression="queryItemId = :q",
+            ExpressionAttributeValues={":q": query_item_id},
+        )
+        rows = response.get("Items", [])
+        while True:
+            for row in rows:
+                self.deactivate_match(query_item_id, row["candidateItemId"])
+            if "LastEvaluatedKey" not in response:
+                break
+            response = self._matches.query(
+                KeyConditionExpression="queryItemId = :q",
+                ExpressionAttributeValues={":q": query_item_id},
+                ExclusiveStartKey=response["LastEvaluatedKey"],
+            )
+            rows = response.get("Items", [])
+
+    def deactivate_match(self, query_item_id: str, candidate_item_id: str) -> None:
+        try:
+            self._matches.update_item(
+                Key={"queryItemId": query_item_id, "candidateItemId": candidate_item_id},
+                UpdateExpression="SET active = :inactive",
+                ConditionExpression="attribute_exists(queryItemId)",
+                ExpressionAttributeValues={":inactive": False},
+            )
+        except Exception as exc:
+            # No prior row means there is nothing to invalidate; do not create a sparse
+            # inactive row for every below-threshold pair.
+            if "ConditionalCheckFailed" in type(exc).__name__ or "ConditionalCheckFailed" in str(exc):
+                return
+            raise

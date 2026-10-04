@@ -46,7 +46,7 @@ STATUS_RESERVED = "reserved"
 STATUS_CLOSED = "closed"
 
 # Statuses that take an item out of matching (neither matched against nor re-matched).
-INACTIVE_STATUSES = {STATUS_WITHDRAWN, STATUS_CLOSED}
+INACTIVE_STATUSES = {STATUS_WITHDRAWN, STATUS_RESERVED, STATUS_CLOSED}
 
 
 @dataclass
@@ -87,6 +87,14 @@ class Item:
     photo_key: Optional[str] = None  # S3 object key, or None if no photo
     vectors: VectorMap = field(default_factory=VectorMap)
     status: str = "pending_match"
+    # Description provenance is intentionally separate from the user-visible text.  Old
+    # rows deserialize as ``unknown``; the UI disclosure does not depend on this field.
+    description_source: str = "unknown"  # user | ai | ai_edited | unknown
+    description_photo_key: Optional[str] = None
+    description_generated_at: Optional[str] = None
+    # User/API revision. Async enrichment may save against this value but must never
+    # overwrite a row whose revision has moved on.
+    revision: int = 0
 
 
 @dataclass

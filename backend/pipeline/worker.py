@@ -27,6 +27,7 @@ from .models import (
     INACTIVE_STATUSES,
 )
 from . import factory
+from .impl.ddb_mapping import now_iso
 
 
 class MatchWorker:
@@ -100,8 +101,15 @@ class MatchWorker:
         # Cross-organisation matching: search every authorised org's opposing inventory.
         candidates = self.retriever.retrieve(item, OrgScope(all_authorised=True))
 
+        # Mark the previous result set stale before rebuilding it. Rows remain in place
+        # so notification dedup survives edits and future rescoring.
+        if item.item_type is ItemType.LOST and hasattr(self.repository, "deactivate_matches_for_query"):
+            self.repository.deactivate_matches_for_query(item.item_id)
+
         match_count = 0
         for candidate in candidates:
+            if item.item_type is ItemType.FOUND and hasattr(self.repository, "deactivate_match"):
+                self.repository.deactivate_match(candidate.item_id, item.item_id)
             if candidate.status in INACTIVE_STATUSES:
                 continue
             if not candidate.vectors.has_text():
@@ -130,7 +138,7 @@ class MatchWorker:
             new_status = STATUS_MATCHED if match_count > 0 else STATUS_NO_MATCH
             if item.status != new_status:
                 item.status = new_status
-                self.repository.save(item)
+                self._save_derived(item)
             print(f"{item_id}: {match_count} match(es) -> status {new_status}")
 
     # ---- helpers -------------------------------------------------------------------
@@ -150,7 +158,7 @@ class MatchWorker:
             return
         if lost.status not in INACTIVE_STATUSES and lost.status != STATUS_MATCHED:
             lost.status = STATUS_MATCHED
-            self.repository.save(lost)
+            self._save_derived(lost)
 
     def _ensure_enriched(self, item: Item) -> Item:
         """Generate a description from a photo if needed, and cache embeddings."""
@@ -160,6 +168,9 @@ class MatchWorker:
             generated = self.description_source.describe(item)
             if generated:
                 item.description = generated
+                item.description_source = "ai"
+                item.description_photo_key = item.photo_key
+                item.description_generated_at = now_iso()
                 changed = True
 
         if not item.vectors.has_text() and item.description:
@@ -167,8 +178,17 @@ class MatchWorker:
             changed = True
 
         if changed:
-            self.repository.save(item)
+            if not self._save_derived(item):
+                # A newer edit won while this job was doing model work. Continue only
+                # with the new row; never write the stale enrichment over it.
+                return self.repository.get(item.item_id)
         return item
+
+    def _save_derived(self, item: Item) -> bool:
+        if hasattr(self.repository, "save_if_revision"):
+            return self.repository.save_if_revision(item, item.revision)
+        self.repository.save(item)
+        return True
 
     @staticmethod
     def _orient(query: Item, candidate: Item, result):

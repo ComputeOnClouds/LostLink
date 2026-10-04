@@ -33,7 +33,9 @@ stateDiagram-v2
 | `withdrawn` | user withdrew the report | "withdrawn" |
 
 - `no_match` is **not** permanent — a later found item can flip it to `matched`.
-- Editing a report clears embeddings → `pending_match` → re-scored.
+- Editing a matching input sets the report to `pending_match` and queues re-scoring.
+  Description changes clear the text embedding; location, time and photo-only changes reuse
+  it. An unchanged save does not enqueue unnecessary matching work.
 - Constants: `backend/pipeline/models.py` (`STATUS_*`, `INACTIVE_STATUSES`).
 
 Found items have their own status driven by claims, not matching:
@@ -82,8 +84,9 @@ actor`):
 Terminal states: `rejected`, `cancelled`, `handed_over`.
 
 The found item moves alongside the claim: `available` → `reserved` (on `reserve`) →
-`closed` (on `hand_over`). Withdrawing a found item rejects active claims and notifies the
-claimants.
+`closed` (on `hand_over`). Reserve and hand-over update the claim and item atomically with
+a DynamoDB transaction, so a Lambda failure cannot leave their lifecycle states out of
+sync. Withdrawing a found item rejects active claims and notifies the claimants.
 
 ---
 
@@ -108,9 +111,28 @@ def details_visible(state):
 Because it's enforced server-side (not just hidden in the UI), the gate holds even if a
 client is tampered with.
 
+## 4. Conversation and evidence details
+
+Claim cards are summaries; opening **View claim** fetches the authorised detail endpoint
+and shows the original evidence, chronological messages, and attachments. Staff questions
+must be non-blank. A claimant reply must contain text or at least one valid attachment and
+returns `info_requested` to `submitted`.
+
+Evidence uploads go directly from the browser to the private photos bucket using a
+short-lived presigned POST policy. The policy and final claim association both enforce
+the type/size limits: JPEG, PNG, WebP or PDF; at most five files per submission/reply,
+10 MiB per file and twenty files per claim. Upload keys are namespaced to the claimant,
+and the API verifies ownership and S3 metadata before association. Detail endpoints sign
+only keys already attached to that authorised claim; there is no general-purpose "sign
+this S3 key" endpoint.
+
+Claims carry a `revision`. State/message updates condition on both the expected state and
+revision, returning 409 on a concurrent change so the UI can refresh without discarding
+the unsent draft.
+
 ---
 
-## 4. How the two machines connect
+## 5. How the two machines connect
 
 ```mermaid
 flowchart LR
@@ -127,7 +149,7 @@ item mine, and can I collect it?".
 
 ---
 
-## 5. Status → UI
+## 6. Status → UI
 
 - Report badge: `pending_match` → "searching…", `matched` → "match found" (green),
   `no_match` → "no match yet", `withdrawn`.
@@ -138,7 +160,7 @@ item mine, and can I collect it?".
 
 ---
 
-## 6. Files
+## 7. Files
 
 | Concern | File |
 |---------|------|
@@ -151,7 +173,7 @@ item mine, and can I collect it?".
 
 ---
 
-## 7. How to change it
+## 8. How to change it
 
 - **Add a claim state / transition**: add the constant + a row in `TRANSITIONS`
   (`claim_state.py`); the handlers and UI labels follow. Keep each transition's `actor`
@@ -161,7 +183,7 @@ item mine, and can I collect it?".
 - **Add a report status**: add to `models.py`; update the worker and
   `reports_handler.py`; add a label in `labels.ts`.
 
-## 8. Verify
+## 9. Verify
 
 ```bash
 wsl -d Ubuntu bash ~/ComputeOnClouds/scripts/verify_status_lifecycle.sh    # matched / no_match

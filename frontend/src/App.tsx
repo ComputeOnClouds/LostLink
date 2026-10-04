@@ -9,6 +9,7 @@ import { Identity, currentIdentity, signIn, signOut } from './auth';
 import { ApiClient } from './api';
 import { Login } from './Login';
 import { Register } from './Register';
+import { Recover } from './Recover';
 import { IndividualPortal } from './IndividualPortal';
 import { StaffPortal } from './StaffPortal';
 
@@ -17,7 +18,8 @@ export function App() {
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
+  const [authScreen, setAuthScreen] = useState<'login' | 'register' | 'recover'>('login');
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
 
   useEffect(() => {
     loadConfig()
@@ -59,8 +61,22 @@ export function App() {
             onConfirmed={handleRegistered}
             onBackToLogin={() => setAuthScreen('login')}
           />
+        ) : authScreen === 'recover' ? (
+          <Recover
+            cfg={cfg}
+            onBack={() => setAuthScreen('login')}
+            onComplete={() => {
+              setAuthNotice('Your password has been reset. Sign in with your new password.');
+              setAuthScreen('login');
+            }}
+          />
         ) : (
-          <Login onLogin={handleLogin} onRegister={() => setAuthScreen('register')} />
+          <Login
+            onLogin={handleLogin}
+            onRegister={() => setAuthScreen('register')}
+            onForgot={() => setAuthScreen('recover')}
+            notice={authNotice}
+          />
         )}
       </Shell>
     );

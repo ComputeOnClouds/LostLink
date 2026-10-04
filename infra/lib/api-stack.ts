@@ -126,6 +126,39 @@ export class ApiStack extends cdk.Stack {
       });
     }
 
+    // ---- On-demand description previews -----------------------------------------
+    // Kept in a request Lambda, separate from item persistence, so cancelling a draft
+    // cannot mutate a report. The operation is authenticated and idempotent.
+    const descriptionsFn = this.pythonHandler(
+      'DescriptionsFn',
+      'api.descriptions_handler.handler',
+      {
+        ITEMS_TABLE: props.data.itemsTable.tableName,
+        PHOTOS_BUCKET: props.data.photosBucket.bucketName,
+        BEDROCK_REGION: this.region,
+      }
+    );
+    props.data.itemsTable.grantReadWriteData(descriptionsFn);
+    props.data.photosBucket.grantRead(descriptionsFn);
+    descriptionsFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['bedrock:InvokeModel'],
+        resources: [
+          'arn:aws:bedrock:*::foundation-model/*',
+          `arn:aws:bedrock:*:${this.account}:inference-profile/*`,
+        ],
+      })
+    );
+    this.httpApi.addRoutes({
+      path: '/descriptions/generate',
+      methods: [apigwv2.HttpMethod.POST],
+      integration: new apigwv2int.HttpLambdaIntegration(
+        'DescriptionsIntegration',
+        descriptionsFn
+      ),
+      authorizer: this.authorizer,
+    });
+
     // ---- Claims handler (Tasks 11 individual + 12 staff) --------------------------
     const claimsFn = this.pythonHandler('ClaimsFn', 'api.claims_handler.handler', {
       ITEMS_TABLE: props.data.itemsTable.tableName,
@@ -133,11 +166,20 @@ export class ApiStack extends cdk.Stack {
       CLAIMS_TABLE: props.data.claimsTable.tableName,
       PHOTOS_BUCKET: props.data.photosBucket.bucketName,
       SENDER_EMAIL: props.config.senderEmail, // claim-decision notifications (Task 12)
+      MAX_EVIDENCE_BYTES: String(10 * 1024 * 1024),
+      MAX_EVIDENCE_PER_MESSAGE: '5',
+      MAX_EVIDENCE_PER_CLAIM: '20',
     });
     props.data.itemsTable.grantReadWriteData(claimsFn); // read items; T12 updates status
     props.data.matchesTable.grantReadData(claimsFn);
     props.data.claimsTable.grantReadWriteData(claimsFn);
     props.data.photosBucket.grantReadWrite(claimsFn); // evidence uploads
+    claimsFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['dynamodb:TransactWriteItems'],
+        resources: [props.data.claimsTable.tableArn, props.data.itemsTable.tableArn],
+      })
+    );
     claimsFn.addToRolePolicy(
       new iam.PolicyStatement({ actions: ['ses:SendEmail'], resources: ['*'] })
     );

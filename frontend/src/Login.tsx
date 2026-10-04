@@ -3,10 +3,12 @@ import { useState } from 'react';
 export function Login({
   onLogin,
   onRegister,
+  onForgot,
   notice,
 }: {
   onLogin: (email: string, password: string) => Promise<void>;
   onRegister: () => void;
+  onForgot: () => void;
   notice?: string | null;
 }) {
   const [email, setEmail] = useState('');
@@ -38,12 +40,15 @@ export function Login({
             <span>Email</span>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
           </label>
-          <label className="field">
-            <span>Password</span>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          </label>
+          <div className="field">
+            <div className="label-row">
+              <label htmlFor="login-password">Password</label>
+              <button type="button" className="linklike" onClick={onForgot}>Forgot password?</button>
+            </div>
+            <input id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </div>
           {error && <div className="notice err">{error}</div>}
-          <button type="submit" disabled={busy} style={{ width: '100%', marginTop: 4 }}>
+          <button type="submit" disabled={busy} className="full-button">
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>

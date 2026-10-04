@@ -42,6 +42,7 @@ _ddb = boto3.resource("dynamodb")
 _sqs = boto3.client("sqs") if _MATCH_QUEUE_URL else None
 
 _ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
+_DESCRIPTION_SOURCES = {"user", "ai", "ai_edited", "unknown"}
 
 
 def _items():
@@ -73,6 +74,9 @@ def _register_found(principal, body) -> dict:
     # generates one from the photo in Task 7). Otherwise a description is required.
     if not description and not photo_key:
         return error(400, "Provide a description, or a photo to generate one from.")
+    photo_error = _validate_new_photo(principal, photo_key)
+    if photo_error:
+        return photo_error
 
     item = Item(
         item_id=f"found-{uuid.uuid4().hex}",
@@ -86,6 +90,10 @@ def _register_found(principal, body) -> dict:
         photo_key=photo_key,
         vectors=VectorMap(),
         status="available",
+        description_source=_description_source(body, description),
+        description_photo_key=body.get("descriptionPhotoKey"),
+        description_generated_at=body.get("descriptionGeneratedAt"),
+        revision=1,
     )
     _items().put_item(Item=item_to_ddb(item))
     _enqueue_match(item.item_id, item.item_type.value)
@@ -122,7 +130,15 @@ def _get_item(principal, item_id) -> dict:
 
 def _update_item(principal, item_id, body) -> dict:
     principal.require_staff()
-    item = _load_in_org(principal, item_id)
+    item, stored = _load_in_org(principal, item_id, include_raw=True)
+    if item.status != "available":
+        return error(409, "Only available items can be edited. Use the claim actions for reserved or closed items.")
+
+    expected_revision = int(body.get("revision", item.revision))
+    old = (
+        item.description, item.location_zone, item.event_time, item.photo_key,
+        item.description_source, item.description_photo_key,
+    )
 
     if "description" in body:
         item.description = (body["description"] or "").strip() or None
@@ -134,25 +150,88 @@ def _update_item(principal, item_id, body) -> dict:
     if "eventTime" in body:
         item.event_time = body["eventTime"]
     if "photoKey" in body:
-        item.photo_key = body["photoKey"]
-    if "status" in body:
-        item.status = (body["status"] or "").strip() or item.status
+        item.photo_key = body["photoKey"] or None
+
+    description_changed = item.description != old[0]
+    photo_changed = item.photo_key != old[3]
+    if photo_changed:
+        photo_error = _validate_new_photo(principal, item.photo_key)
+        if photo_error:
+            return photo_error
+    if (
+        photo_changed
+        and not description_changed
+        and item.description_source in {"ai", "ai_edited"}
+        and item.description_photo_key == old[3]
+        and not body.get("confirmKeepDescription")
+    ):
+        return error(409, "Confirm that the existing generated description still matches the new photo, or generate a replacement.")
+    if "descriptionSource" in body:
+        requested_source = body.get("descriptionSource")
+        if requested_source not in _DESCRIPTION_SOURCES:
+            return error(400, "Invalid descriptionSource.")
+        item.description_source = requested_source
+    elif description_changed:
+        item.description_source = "ai_edited" if old[4] in {"ai", "ai_edited"} else "user"
+    if "descriptionPhotoKey" in body:
+        item.description_photo_key = body.get("descriptionPhotoKey")
+    if "descriptionGeneratedAt" in body:
+        item.description_generated_at = body.get("descriptionGeneratedAt")
 
     if not item.description and not item.photo_key:
         return error(400, "Item must have a description or a photo.")
 
-    # Content changes invalidate embeddings; recompute via the worker.
-    item.vectors = VectorMap()
-    _items().put_item(Item=item_to_ddb(item))
-    _enqueue_match(item.item_id, item.item_type.value)
-    return respond(200, _public_view(item))
+    changed = old != (
+        item.description, item.location_zone, item.event_time, item.photo_key,
+        item.description_source, item.description_photo_key,
+    )
+    if not changed:
+        view = _public_view(item)
+        view["rematching"] = False
+        return respond(200, view)
+    if description_changed:
+        item.vectors = VectorMap()
+    relevant_changed = any((description_changed, photo_changed, item.location_zone != old[1], item.event_time != old[2]))
+    item.revision += 1
+    ddb_item = item_to_ddb(item, created_at=stored.get("createdAt"))
+    ddb_item["updatedAt"] = now_iso()
+    try:
+        _items().put_item(
+            Item=ddb_item,
+            ConditionExpression="attribute_not_exists(revision) OR revision = :expected",
+            ExpressionAttributeValues={":expected": expected_revision},
+        )
+    except Exception as exc:
+        if _is_conflict(exc):
+            return error(409, "This item changed in another session. Reload it before saving.")
+        raise
+    if relevant_changed:
+        _enqueue_match(item.item_id, item.item_type.value)
+    view = _public_view(item)
+    view["rematching"] = relevant_changed
+    return respond(200, view)
 
 
 def _withdraw_item(principal, item_id) -> dict:
     principal.require_staff()
-    item = _load_in_org(principal, item_id)
+    item, stored = _load_in_org(principal, item_id, include_raw=True)
+    if item.status == "withdrawn":
+        return respond(200, {"itemId": item.item_id, "status": item.status, "claimsAffected": 0})
+    expected_revision = item.revision
     item.status = "withdrawn"
-    _items().put_item(Item=item_to_ddb(item))
+    item.revision += 1
+    ddb_item = item_to_ddb(item, created_at=stored.get("createdAt"))
+    ddb_item["updatedAt"] = now_iso()
+    try:
+        _items().put_item(
+            Item=ddb_item,
+            ConditionExpression="attribute_not_exists(revision) OR revision = :expected",
+            ExpressionAttributeValues={":expected": expected_revision},
+        )
+    except Exception as exc:
+        if _is_conflict(exc):
+            return error(409, "This item changed in another session. Refresh before withdrawing it.")
+        raise
 
     # Reject + notify any active claimants on this now-unavailable item (best-effort).
     affected = 0
@@ -173,7 +252,7 @@ def _create_upload_url(principal, body) -> dict:
     if content_type not in _ALLOWED_CONTENT_TYPES:
         return error(400, f"contentType must be one of {sorted(_ALLOWED_CONTENT_TYPES)}.")
     reserved_item_id = f"found-{uuid.uuid4().hex}"
-    key = s3urls.new_photo_key(org, reserved_item_id, content_type)
+    key = s3urls.new_photo_key(f"uploads/{principal.user_id}", reserved_item_id, content_type)
     url = s3urls.presign_put(key, content_type)
     return respond(200, {"uploadUrl": url, "photoKey": key})
 
@@ -185,7 +264,7 @@ def org_type_key_str(org: str, type_str: str) -> str:
     return f"{org}#{type_str}"
 
 
-def _load_in_org(principal, item_id):
+def _load_in_org(principal, item_id, include_raw=False):
     if not item_id:
         raise AuthError(400, "Missing item id.")
     resp = _items().get_item(Key={"itemId": item_id})
@@ -197,7 +276,7 @@ def _load_in_org(principal, item_id):
     # Org boundary: staff may only touch items in their own organisation.
     if item.organisation_id != principal.organisation_id:
         raise AuthError(403, "You do not have access to this item.")
-    return item
+    return (item, resp["Item"]) if include_raw else item
 
 
 def _public_view(item) -> dict:
@@ -209,8 +288,38 @@ def _public_view(item) -> dict:
         "locationZone": item.location_zone,
         "eventTime": item.event_time,
         "photoKey": item.photo_key,
+        "photoUrl": s3urls.presign_get(item.photo_key) if item.photo_key else None,
         "status": item.status,
+        "descriptionSource": item.description_source,
+        "descriptionPhotoKey": item.description_photo_key,
+        "descriptionGeneratedAt": item.description_generated_at,
+        "revision": item.revision,
     }
+
+
+def _description_source(body, description: str) -> str:
+    requested = body.get("descriptionSource")
+    if requested in _DESCRIPTION_SOURCES:
+        return requested
+    return "user" if description else "unknown"
+
+
+def _validate_new_photo(principal, key) -> dict | None:
+    if not key:
+        return None
+    if not isinstance(key, str) or not key.startswith(f"uploads/{principal.user_id}/"):
+        return error(403, "The selected photo does not belong to this account.")
+    try:
+        meta = s3urls.head(key)
+    except Exception:
+        return error(400, "The uploaded photo could not be found. Upload it again.")
+    if (meta.get("ContentType") or "").lower() not in _ALLOWED_CONTENT_TYPES:
+        return error(400, "The uploaded photo has an unsupported type.")
+    return None
+
+
+def _is_conflict(exc: Exception) -> bool:
+    return "ConditionalCheckFailed" in type(exc).__name__ or "ConditionalCheckFailed" in str(exc)
 
 
 # ---- entry point --------------------------------------------------------------------

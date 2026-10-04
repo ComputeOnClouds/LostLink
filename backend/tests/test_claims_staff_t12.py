@@ -34,7 +34,7 @@ class FakeTable:
         return {"Items": list(self.rows.values())}
 
     def update_item(self, Key=None, UpdateExpression=None, ExpressionAttributeNames=None,
-                    ExpressionAttributeValues=None):
+                    ExpressionAttributeValues=None, ConditionExpression=None):
         self.updates.append((Key, ExpressionAttributeValues))
         k = tuple(sorted(Key.items()))
         row = self.rows.setdefault(k, dict(Key))
@@ -49,6 +49,8 @@ class FakeTable:
             row["messages"] = vals[":m"]
         if ":u" in vals:
             row["updatedAt"] = vals[":u"]
+        if ":nr" in vals:
+            row["revision"] = vals[":nr"]
         return {}
 
 
@@ -69,6 +71,30 @@ def _wire(monkeypatch, claims_rows, items_rows=None):
     items = FakeTable(items_rows or {})
     monkeypatch.setattr(ch, "_claims", lambda: claims)
     monkeypatch.setattr(ch, "_items", lambda: items)
+
+    def fake_transact_claim_and_item(**kwargs):
+        claims.update_item(
+            Key={"claimId": kwargs["claim_id"]},
+            UpdateExpression="SET #s = :s, messages = :m, updatedAt = :u, revision = :nr",
+            ExpressionAttributeNames={"#s": "state"},
+            ExpressionAttributeValues={
+                ":s": kwargs["new_state"],
+                ":m": kwargs["messages"],
+                ":u": kwargs["updated_at"],
+                ":nr": kwargs["next_revision"],
+            },
+        )
+        items.update_item(
+            Key={"itemId": kwargs["candidate_item_id"]},
+            UpdateExpression="SET #s = :s, updatedAt = :u",
+            ExpressionAttributeNames={"#s": "status"},
+            ExpressionAttributeValues={
+                ":s": "reserved" if kwargs["new_state"] == cs.STATE_RESERVED else "closed",
+                ":u": kwargs["updated_at"],
+            },
+        )
+
+    monkeypatch.setattr(ch, "_transact_claim_and_item", fake_transact_claim_and_item)
     # no real SES
     monkeypatch.delenv("SENDER_EMAIL", raising=False)
     return claims, items
@@ -109,6 +135,12 @@ def test_invalid_staff_transition_409(monkeypatch):
           {_key(itemId="found-1"): {"itemId": "found-1"}})
     r = ch._staff_transition(_staff(), "claim-1", "approve", {})  # already approved
     assert r["statusCode"] == 409
+
+
+def test_request_info_requires_a_question(monkeypatch):
+    _wire(monkeypatch, {_key(claimId="claim-1"): _claim()})
+    r = ch._staff_transition(_staff(), "claim-1", "request_info", {"message": "   "})
+    assert r["statusCode"] == 400
 
 
 def test_cross_org_claim_denied(monkeypatch):
