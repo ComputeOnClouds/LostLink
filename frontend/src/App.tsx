@@ -113,10 +113,10 @@ export function App() {
 
 function TopBar({ email, roleLabel, onLogout }: { email: string | null; roleLabel: string; onLogout: () => void }) {
   return (
-    <div className="topbar">
+    <header className="topbar">
       <div className="brand">
-        <span className="logo">◎</span>
-        <span>LostLink</span>
+        <LogoMark />
+        <span className="brand-name">LostLink</span>
         <span className="tag">· cross-organisation lost &amp; found</span>
       </div>
       <div className="userbox">
@@ -124,20 +124,20 @@ function TopBar({ email, roleLabel, onLogout }: { email: string | null; roleLabe
         <span>{email}</span>
         <button className="secondary sm" onClick={onLogout}>Sign out</button>
       </div>
-    </div>
+    </header>
   );
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <>
-      <div className="topbar">
+      <header className="topbar">
         <div className="brand">
-          <span className="logo">◎</span>
-          <span>LostLink</span>
+          <LogoMark />
+          <span className="brand-name">LostLink</span>
           <span className="tag">· cross-organisation lost &amp; found</span>
         </div>
-      </div>
+      </header>
       {children}
     </>
   );
@@ -145,4 +145,16 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function Centered({ children }: { children: React.ReactNode }) {
   return <div className="center-screen">{children}</div>;
+}
+
+function LogoMark() {
+  return (
+    <span className="logo" aria-hidden="true">
+      <svg viewBox="0 0 32 32" focusable="false">
+        <path d="M11.25 9.25h-1.5a6.75 6.75 0 0 0 0 13.5h4.5a6.75 6.75 0 0 0 5.87-3.41" />
+        <path d="M20.75 22.75h1.5a6.75 6.75 0 0 0 0-13.5h-4.5a6.75 6.75 0 0 0-5.87 3.41" />
+        <path d="M10.75 16h10.5" />
+      </svg>
+    </span>
+  );
 }

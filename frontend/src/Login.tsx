@@ -33,8 +33,8 @@ export function Login({
     <div className="login-wrap">
       <div className="card">
         <h2>Sign in</h2>
-        <p style={{ color: 'var(--muted)', marginTop: 0 }}>Access your reports, or your organisation’s inventory.</p>
-        {notice && <div className="notice ok">{notice}</div>}
+        <p className="auth-intro">Access your reports, or your organisation’s inventory.</p>
+        {notice && <div className="notice ok" role="status">{notice}</div>}
         <form onSubmit={submit}>
           <label className="field">
             <span>Email</span>
@@ -47,7 +47,7 @@ export function Login({
             </div>
             <input id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
-          {error && <div className="notice err">{error}</div>}
+          {error && <div className="notice err" role="alert">{error}</div>}
           <button type="submit" disabled={busy} className="full-button">
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
