@@ -95,6 +95,23 @@ def test_embedder_empty_description_returns_empty_vectormap():
     assert fake.last_body is None  # no Bedrock call made
 
 
+def test_embedding_endpoint_override_keeps_description_endpoint_in_deployment_region(monkeypatch):
+    import boto3
+
+    monkeypatch.setenv("BEDROCK_REGION", "ap-southeast-1")
+    monkeypatch.setenv("EMBED_BEDROCK_REGION", "ap-southeast-2")
+    calls = []
+    monkeypatch.setattr(boto3, "client", lambda service, region_name: calls.append((service, region_name)))
+
+    TitanEmbedder().client
+    ClaudeDescriptionSource().bedrock
+
+    assert calls == [
+        ("bedrock-runtime", "ap-southeast-2"),
+        ("bedrock-runtime", "ap-southeast-1"),
+    ]
+
+
 # ---- DescriptionSource --------------------------------------------------------------
 
 

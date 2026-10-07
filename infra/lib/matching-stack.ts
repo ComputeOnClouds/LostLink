@@ -55,6 +55,10 @@ export class MatchingStack extends cdk.Stack {
         MATCHES_TABLE: props.data.matchesTable.tableName,
         PHOTOS_BUCKET: props.data.photosBucket.bucketName,
         BEDROCK_REGION: this.region,
+        // Titan Text Embeddings V2 is unavailable in Singapore.
+        EMBED_BEDROCK_REGION: process.env.EMBED_BEDROCK_REGION ??
+          (this.region === 'ap-southeast-1' ? 'us-east-1' : this.region),
+        DESCRIBE_MODEL_ID: process.env.DESCRIBE_MODEL_ID ?? 'au.anthropic.claude-haiku-4-5-20251001-v1:0',
         // Retriever selector (bruteforce | ann) — RATIONALE ADR-006.
         RETRIEVER: m.retriever,
         // Scoring weights + threshold — RATIONALE ADR-004/005.

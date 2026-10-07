@@ -160,6 +160,7 @@ def _update_item(principal, item_id, body) -> dict:
             return photo_error
     if (
         photo_changed
+        and item.photo_key
         and not description_changed
         and item.description_source in {"ai", "ai_edited"}
         and item.description_photo_key == old[3]

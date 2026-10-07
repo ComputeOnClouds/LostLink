@@ -115,8 +115,8 @@ def _generate(principal, body) -> dict:
         }
         _items().update_item(
             Key={"itemId": marker_id},
-            UpdateExpression="SET #s = :s, result = :r, updatedAt = :u",
-            ExpressionAttributeNames={"#s": "status"},
+            UpdateExpression="SET #s = :s, #result = :r, updatedAt = :u",
+            ExpressionAttributeNames={"#s": "status", "#result": "result"},
             ExpressionAttributeValues={":s": "complete", ":r": result, ":u": now_iso()},
         )
         return respond(200, result)

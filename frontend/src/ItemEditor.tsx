@@ -36,16 +36,32 @@ export function ItemEditor({
   const [error, setError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const automaticAttempt = useRef<string | null>(null);
+  const generationVersion = useRef(0);
+
+  function invalidateGeneration() {
+    generationVersion.current += 1;
+    setGenerated(null);
+    setGenerationError(null);
+    setGenerationBusy(false);
+    setConfirmKeep(false);
+  }
+
+  useEffect(() => () => { generationVersion.current += 1; }, []);
 
   async function generate(key: string) {
+    const version = ++generationVersion.current;
     setGenerationBusy(true);
     setGenerationError(null);
+    setGenerated(null);
     try {
-      setGenerated(await api.generateDescription(key, crypto.randomUUID(), initial?.itemId));
+      const draft = await api.generateDescription(key, crypto.randomUUID(), initial?.itemId);
+      if (version === generationVersion.current) setGenerated(draft);
     } catch (err) {
-      setGenerationError(err instanceof Error ? err.message : 'Description generation failed.');
+      if (version === generationVersion.current) {
+        setGenerationError(err instanceof Error ? err.message : 'Description generation failed.');
+      }
     } finally {
-      setGenerationBusy(false);
+      if (version === generationVersion.current) setGenerationBusy(false);
     }
   }
 
@@ -123,7 +139,7 @@ export function ItemEditor({
   }
 
   const replacingGeneratedPhoto = Boolean(
-    initial?.photoKey !== photoKey
+    photoKey && initial?.photoKey !== photoKey
     && (initial?.descriptionSource === 'ai' || initial?.descriptionSource === 'ai_edited')
     && initial.descriptionPhotoKey === initial.photoKey
     && description === (initial.description || '')
@@ -168,14 +184,26 @@ export function ItemEditor({
       <div className="field photo-field">
         <span>Photo <span className="hint">(optional)</span></span>
         {photoUrl && <img className="photo-preview" src={photoUrl} alt="Current item" />}
-        <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setPhotoFile(event.target.files?.[0] || null)} />
+        <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (!file) return;
+          invalidateGeneration();
+          setUploadBusy(true);
+          setPhotoFile(file);
+        }} />
         <div className="btn-row compact">
           {photoKey && (
             <button type="button" className="secondary sm" disabled={uploadBusy || generationBusy} onClick={() => void generate(photoKey)}>
               {generationBusy ? 'Generating…' : 'Generate description from photo'}
             </button>
           )}
-          {photoKey && <button type="button" className="danger sm" onClick={() => { setPhotoKey(null); setPhotoUrl(null); setPhotoFile(null); }}>Remove photo</button>}
+          {photoKey && <button type="button" className="danger sm" onClick={() => {
+            invalidateGeneration();
+            setUploadBusy(false);
+            setPhotoKey(null);
+            setPhotoUrl(null);
+            setPhotoFile(null);
+          }}>Remove photo</button>}
         </div>
       </div>
 

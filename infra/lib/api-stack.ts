@@ -136,6 +136,7 @@ export class ApiStack extends cdk.Stack {
         ITEMS_TABLE: props.data.itemsTable.tableName,
         PHOTOS_BUCKET: props.data.photosBucket.bucketName,
         BEDROCK_REGION: this.region,
+        DESCRIBE_MODEL_ID: process.env.DESCRIBE_MODEL_ID ?? 'au.anthropic.claude-haiku-4-5-20251001-v1:0',
       }
     );
     props.data.itemsTable.grantReadWriteData(descriptionsFn);
