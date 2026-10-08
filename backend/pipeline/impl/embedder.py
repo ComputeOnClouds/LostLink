@@ -7,6 +7,7 @@ embedding contributes to matching today.
 Model + region are config-driven so the stage can point at a different model or a
 cross-region Bedrock endpoint without code changes:
     EMBED_MODEL_ID   default amazon.titan-embed-text-v2:0  (1024-dim)
+    EMBED_BEDROCK_REGION optional embedding endpoint override
     BEDROCK_REGION   default AWS_REGION (falls back to ap-southeast-2)
 """
 
@@ -24,8 +25,10 @@ _DEFAULT_MODEL = "amazon.titan-embed-text-v2:0"
 class TitanEmbedder(Embedder):
     def __init__(self, client=None) -> None:
         self._model_id = os.environ.get("EMBED_MODEL_ID", _DEFAULT_MODEL)
-        self._region = os.environ.get("BEDROCK_REGION") or os.environ.get(
-            "AWS_REGION", "ap-southeast-2"
+        self._region = (
+            os.environ.get("EMBED_BEDROCK_REGION")
+            or os.environ.get("BEDROCK_REGION")
+            or os.environ.get("AWS_REGION", "ap-southeast-2")
         )
         self._client = client  # injectable for tests
 

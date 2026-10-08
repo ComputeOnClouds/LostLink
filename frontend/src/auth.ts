@@ -138,3 +138,30 @@ export function resendCode(cfg: RuntimeConfig, email: string): Promise<void> {
     });
   });
 }
+
+/** Start (or resend) Cognito's email-only password recovery flow. */
+export function requestPasswordReset(cfg: RuntimeConfig, email: string): Promise<void> {
+  const user = new CognitoUser({ Username: email, Pool: userPool(cfg) });
+  return new Promise((resolve, reject) => {
+    user.forgotPassword({
+      onSuccess: () => resolve(),
+      onFailure: (err) => reject(new Error(err.message || 'Could not request a reset code')),
+      inputVerificationCode: () => resolve(),
+    });
+  });
+}
+
+export function confirmPasswordReset(
+  cfg: RuntimeConfig,
+  email: string,
+  code: string,
+  newPassword: string,
+): Promise<void> {
+  const user = new CognitoUser({ Username: email, Pool: userPool(cfg) });
+  return new Promise((resolve, reject) => {
+    user.confirmPassword(code.trim(), newPassword, {
+      onSuccess: () => resolve(),
+      onFailure: (err) => reject(new Error(err.message || 'Could not reset the password')),
+    });
+  });
+}

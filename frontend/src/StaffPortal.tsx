@@ -1,238 +1,141 @@
-/**
- * Staff portal: review ownership claims against the org, register found items, and
- * manage the org's inventory. Everything is scoped to the staff member's organisation
- * (enforced server-side from the JWT). Rendered when the user is in the Staff group.
- */
 import { useEffect, useState } from 'react';
 import { ApiClient, FoundItem, StaffClaim } from './api';
-import { nowLocal } from './time';
-import { itemStatusLabel, claimStateLabel } from './labels';
+import { ClaimDetailPanel } from './ClaimWorkflow';
+import { DescriptionBlock } from './DescriptionDisclosure';
+import { ItemEditor } from './ItemEditor';
+import { claimStateLabel, itemStatusLabel } from './labels';
+import { formatLocalTime } from './time';
 
 export function StaffPortal({ api, organisationId }: { api: ApiClient; organisationId: string | null }) {
   const [items, setItems] = useState<FoundItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [msg, setMsg] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [editing, setEditing] = useState<FoundItem | null>(null);
 
-  async function refresh(q?: string) {
+  async function refresh(search?: string) {
     setLoading(true);
-    try {
-      const { items } = await api.listItems(q);
-      setItems(items);
-    } finally {
-      setLoading(false);
-    }
+    try { setItems((await api.listItems(search)).items); }
+    finally { setLoading(false); }
   }
 
-  useEffect(() => {
-    refresh();
-  }, []);
+  useEffect(() => { void refresh(); }, []);
 
   return (
-    <div className="grid">
+    <div className="grid portal-grid">
       {!organisationId && (
-        <div className="notice err">
-          Your staff account isn’t linked to an organisation yet. Email the LostLink admin
-          at <strong>satpathy.amrit@u.nus.edu</strong> to register your organisation and
-          get it linked to your account.
-        </div>
+        <div className="notice err">Your staff account isn’t linked to an organisation. Contact the LostLink administrator.</div>
       )}
 
       <ClaimReview api={api} />
 
-      <div className="card">
+      <section className="card">
         <h2>Register a found item</h2>
-        <ItemForm
-          onSubmit={async (input) => {
+        <ItemEditor
+          api={api}
+          kind="item"
+          submitLabel="Register item"
+          onSave={async (input) => {
             await api.createItem(input);
-            setMsg('Found item registered.');
+            setMessage('Found item registered. Matching will continue in the background.');
             await refresh();
           }}
         />
-        {msg && <div className="notice ok">{msg}</div>}
-      </div>
+        {message && <div className="notice ok" role="status">{message}</div>}
+      </section>
 
-      <div className="card">
-        <h2>Inventory <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: '.85rem' }}>· {organisationId}</span></h2>
-        <div className="search-row">
-          <input placeholder="search description…" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <button className="secondary" onClick={() => refresh(query.trim() || undefined)}>Search</button>
+      <section className="card">
+        <div className="section-heading">
+          <div><h2>Inventory</h2><p className="meta">{organisationId}</p></div>
         </div>
-        {loading ? (
-          <p className="empty">Loading…</p>
-        ) : items.length === 0 ? (
-          <p className="empty">No items.</p>
+        <form className="search-row" onSubmit={(event) => { event.preventDefault(); void refresh(query.trim() || undefined); }}>
+          <label className="sr-only" htmlFor="inventory-search">Search inventory</label>
+          <input id="inventory-search" placeholder="Search description…" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <button>Search</button>
+          {query && <button type="button" className="secondary" onClick={() => { setQuery(''); void refresh(); }}>Clear</button>}
+        </form>
+        {loading ? <p className="empty">Loading inventory…</p> : items.length === 0 ? (
+          <p className="empty">No items match this view.</p>
         ) : (
           <ul className="list">
-            {items.map((it) => (
-              <li key={it.itemId} className="tile">
-                <div className="title">{it.description || '(photo-based item)'}</div>
-                <div className="meta">
-                  {it.locationZone} · {it.eventTime?.slice(0, 10)} ·{' '}
-                  <span className={`badge ${it.status}`}>{itemStatusLabel(it.status)}</span>
-                </div>
-                {it.status !== 'withdrawn' && (
-                  <div className="btn-row">
-                    <button
-                      className="danger sm"
-                      onClick={async () => {
-                        await api.withdrawItem(it.itemId);
-                        await refresh();
-                      }}
-                    >
-                      Withdraw
-                    </button>
-                  </div>
+            {items.map((item) => (
+              <li key={item.itemId} className="tile">
+                {editing?.itemId === item.itemId ? (
+                  <ItemEditor
+                    api={api}
+                    kind="item"
+                    initial={editing}
+                    submitLabel="Save changes"
+                    onCancel={() => setEditing(null)}
+                    onSave={async (input) => {
+                      const saved = await api.updateItem(item.itemId, input);
+                      setMessage(saved.rematching ? 'Item saved. We’re checking matches again.' : 'Item saved.');
+                      setEditing(null);
+                      await refresh(query.trim() || undefined);
+                    }}
+                  />
+                ) : (
+                  <>
+                    <div className="tile-heading">
+                      <DescriptionBlock description={item.description} />
+                      <span className={`badge ${item.status}`}>{itemStatusLabel(item.status)}</span>
+                    </div>
+                    <div className="meta">{item.locationZone} · {formatLocalTime(item.eventTime)}</div>
+                    <div className="btn-row">
+                      {item.status === 'available' && (
+                        <button type="button" className="secondary sm" onClick={async () => setEditing(await api.getItem(item.itemId))}>Edit</button>
+                      )}
+                      {item.status === 'available' && (
+                        <button type="button" className="danger sm" onClick={async () => { await api.withdrawItem(item.itemId); await refresh(); }}>Withdraw</button>
+                      )}
+                    </div>
+                  </>
                 )}
               </li>
             ))}
           </ul>
         )}
-      </div>
+      </section>
     </div>
   );
 }
 
-function ItemForm({
-  onSubmit,
-}: {
-  onSubmit: (input: { description?: string; locationZone: string; eventTime?: string; photo?: File | null }) => Promise<void>;
-}) {
-  const [description, setDescription] = useState('');
-  const [locationZone, setLocationZone] = useState('');
-  // Prefill with the current local time; this exact value is submitted if left unchanged.
-  const [eventTime, setEventTime] = useState(nowLocal());
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      await onSubmit({
-        description: description.trim() || undefined,
-        locationZone: locationZone.trim(),
-        eventTime: eventTime ? new Date(eventTime).toISOString() : undefined,
-        photo,
-      });
-      setDescription('');
-      setLocationZone('');
-      setEventTime(nowLocal());
-      setPhoto(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Submit failed');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit}>
-      <label className="field">
-        <span>Photo <span className="hint">(a description can be generated from it)</span></span>
-        <input type="file" accept="image/*" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
-      </label>
-      <label className="field">
-        <span>Description <span className="hint">(optional if a photo is provided)</span></span>
-        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. dark leather wallet, red stripe, found near the entrance" />
-      </label>
-      <label className="field">
-        <span>Location zone*</span>
-        <input value={locationZone} onChange={(e) => setLocationZone(e.target.value)} required placeholder="e.g. zone-central-library" />
-      </label>
-      <label className="field">
-        <span>Time found <span className="hint">(defaults to now — change it if you know when)</span></span>
-        <input type="datetime-local" value={eventTime} onChange={(e) => setEventTime(e.target.value)} />
-      </label>
-      {error && <div className="notice err">{error}</div>}
-      <button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Register item'}</button>
-    </form>
-  );
-}
-
-/**
- * Claim review: lists claims against this org with the claimant's evidence, and offers
- * only the actions valid from each claim's current state (mirrors the backend claim
- * state machine, so the UI never offers an illegal transition).
- */
 function ClaimReview({ api }: { api: ApiClient }) {
   const [claims, setClaims] = useState<StaffClaim[]>([]);
   const [loading, setLoading] = useState(true);
+  const [openClaim, setOpenClaim] = useState<string | null>(null);
 
   async function refresh() {
     setLoading(true);
-    try {
-      const { claims } = await api.listOrgClaims();
-      setClaims(claims);
-    } finally {
-      setLoading(false);
-    }
+    try { setClaims((await api.listOrgClaims()).claims); }
+    finally { setLoading(false); }
   }
 
-  useEffect(() => {
-    refresh();
-  }, []);
-
-  async function act(
-    claimId: string,
-    action: 'request-info' | 'approve' | 'reject' | 'reserve' | 'handover'
-  ) {
-    const needsMsg = action === 'request-info' || action === 'reject';
-    const message = needsMsg ? window.prompt('Add a note for the claimant (optional):') || undefined : undefined;
-    await api.claimAction(claimId, action, message);
-    await refresh();
-  }
-
-  // Which staff actions are valid from a given claim state — mirrors backend
-  // claim_state.TRANSITIONS so the UI only shows legal moves (terminal states show none).
-  const actionsFor = (state: string): Array<'request-info' | 'approve' | 'reject' | 'reserve' | 'handover'> => {
-    if (state === 'submitted') return ['request-info', 'approve', 'reject'];
-    if (state === 'info_requested') return ['reject'];
-    if (state === 'approved') return ['reserve', 'handover'];
-    if (state === 'reserved') return ['handover'];
-    return [];
-  };
-
-  const primary = new Set(['approve', 'reserve', 'handover']);
+  useEffect(() => { void refresh(); }, []);
 
   return (
-    <div className="card">
-      <h2>Ownership claims</h2>
-      {loading ? (
-        <p className="empty">Loading…</p>
-      ) : claims.length === 0 ? (
-        <p className="empty">No claims yet.</p>
+    <section className="card">
+      <div className="section-heading">
+        <h2>Ownership claims</h2>
+        <button className="secondary sm" onClick={() => void refresh()}>Refresh</button>
+      </div>
+      {loading ? <p className="empty">Loading claims…</p> : claims.length === 0 ? (
+        <p className="empty">No claims yet. New ownership claims will appear here.</p>
       ) : (
         <ul className="list">
-          {claims.map((c) => (
-            <li key={c.claimId} className="tile">
-              <div>
-                <span className={`badge ${c.state}`}>{claimStateLabel(c.state)}</span>{' '}
-                <span className="meta">claim {c.claimId.slice(0, 14)}…</span>
+          {claims.map((claim) => (
+            <li key={claim.claimId} className="tile">
+              <div className="tile-heading">
+                <span className={`badge ${claim.state}`}>{claimStateLabel(claim.state)}</span>
+                <span className="meta">Updated {formatLocalTime(claim.updatedAt)}</span>
               </div>
-              <div className="evidence">
-                <strong>Evidence:</strong> {c.evidenceText || '(files only)'}
-                {c.evidenceKeys.length > 0 && ` · ${c.evidenceKeys.length} file(s)`}
-              </div>
-              {actionsFor(c.state).length > 0 && (
-                <div className="btn-row">
-                  {actionsFor(c.state).map((a) => (
-                    <button
-                      key={a}
-                      className={primary.has(a) ? 'sm' : a === 'reject' ? 'danger sm' : 'secondary sm'}
-                      onClick={() => act(c.claimId, a)}
-                    >
-                      {a.replace('-', ' ')}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="evidence"><strong>Evidence:</strong> {claim.evidenceText || '(files only)'}</div>
+              <div className="btn-row"><button className="secondary sm" onClick={() => setOpenClaim(claim.claimId)}>View claim</button></div>
             </li>
           ))}
         </ul>
       )}
-    </div>
+      {openClaim && <ClaimDetailPanel api={api} claimId={openClaim} role="staff" onClose={() => setOpenClaim(null)} onChanged={refresh} />}
+    </section>
   );
 }

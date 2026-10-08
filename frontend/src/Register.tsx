@@ -93,10 +93,10 @@ export function Register({
 
         {step === 'details' ? (
           <>
-            <p style={{ color: 'var(--muted)', marginTop: 0 }}>
+            <p className="auth-intro">
               Report a lost item once — we search partner organisations for you.
             </p>
-            {error && <div className="notice err">{error}</div>}
+            {error && <div className="notice err" role="alert">{error}</div>}
             <form onSubmit={submitDetails}>
               <label className="field">
                 <span>Email</span>
@@ -111,15 +111,15 @@ export function Register({
                 <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
               </label>
               <p className="hint">At least 8 characters, with an uppercase letter, a lowercase letter and a number.</p>
-              <button type="submit" disabled={busy} style={{ width: '100%', marginTop: 4 }}>
+              <button type="submit" disabled={busy} className="full-button">
                 {busy ? 'Creating…' : 'Create account'}
               </button>
             </form>
           </>
         ) : (
           <>
-            {info && <div className="notice ok">{info}</div>}
-            {error && <div className="notice err">{error}</div>}
+            {info && <div className="notice ok" role="status">{info}</div>}
+            {error && <div className="notice err" role="alert">{error}</div>}
             <form onSubmit={submitCode}>
               <label className="field">
                 <span>Verification code</span>
@@ -132,7 +132,7 @@ export function Register({
                   autoFocus
                 />
               </label>
-              <button type="submit" disabled={busy} style={{ width: '100%', marginTop: 4 }}>
+              <button type="submit" disabled={busy} className="full-button">
                 {busy ? 'Confirming…' : 'Confirm & sign in'}
               </button>
             </form>

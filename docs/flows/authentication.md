@@ -60,6 +60,12 @@ client, no secret):
 - `signUp` / `confirmSignUp` / `resendCode` — the registration flow (`Register.tsx`).
 - `signIn` — authenticates and returns an `Identity` decoded from the **ID token**.
 - `currentIdentity` — restores a session (with refresh) on reload; `signOut` clears it.
+- `requestPasswordReset` / `confirmPasswordReset` — Cognito's email-only recovery flow.
+
+The login screen links to a two-step recovery UI (`Recover.tsx`): request a code, then
+enter the code and a policy-compliant new password. The request confirmation is neutral
+so the UI does not reveal whether an address is registered. Codes and passwords stay in
+component state only; no application Lambda or LostLink table handles them.
 
 The ID token carries the three claims the app relies on:
 
@@ -96,8 +102,8 @@ That is the foundation of the access model described in
 |---------|------|
 | User pool, groups, client, trigger wiring | `infra/lib/auth-stack.ts` |
 | Post-confirmation role assignment | `backend/api/post_confirmation.py` |
-| Frontend auth (sign up / in / out) | `frontend/src/auth.ts` |
-| Register/confirm UI | `frontend/src/Register.tsx`, `Login.tsx`, `App.tsx` |
+| Frontend auth (sign up / in / out / recovery) | `frontend/src/auth.ts` |
+| Register/confirm/recovery UI | `frontend/src/Register.tsx`, `Recover.tsx`, `Login.tsx`, `App.tsx` |
 | Backend claim-reading / Principal | `backend/api/auth.py` |
 | Staff/demo seeding | `scripts/seed_demo.sh` |
 

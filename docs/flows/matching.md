@@ -68,7 +68,7 @@ New implementation of any stage = write a class implementing the interface, add 
 Job: `{"itemId": "...", "type": "lost" | "found"}`.
 
 1. **Load** the item. Deleted between enqueue and processing → skip (no crash/DLQ).
-   Status in `INACTIVE_STATUSES` (`withdrawn`, `closed`) → skip.
+   Status in `INACTIVE_STATUSES` (`withdrawn`, `reserved`, `closed`) → skip.
 2. **Enrich** (`_ensure_enriched`): no description but a photo → Claude writes one; then
    Titan embeds. Both cached back to the item row (paid once).
 3. **Retrieve** opposing-type candidates across every org (lost → all `found`; found →
@@ -79,6 +79,19 @@ Job: `{"itemId": "...", "type": "lost" | "found"}`.
    the owner (deduped), mark the lost report `matched`. After the loop the triggering
    lost report is set `matched` (≥1) or `no_match` (0). Found items keep their
    staff/claims status.
+
+Edits are revision-aware. Description changes clear the text vector; location/time/photo
+changes reuse it. Relevant edits still enqueue a new match job. The worker conditions
+derived writes on the revision it loaded, marks obsolete match rows inactive, and
+reactivates qualifying pairs without resetting notification-dedup history. A stale queued
+job therefore cannot overwrite a newer edit or withdrawal.
+
+Photo-generated descriptions record their source photo and generation time. Explicit
+preview generation runs in the authenticated `descriptions_handler` Lambda and remains
+separate from saving; only accepted or edited text is embedded. The UI disclosure is
+the deterministic literal `may be generated using Gen AI.` and never enters stored
+descriptions or model prompts. Request identifiers deduplicate preview calls; their sparse
+marker records expire from the Items table after 24 hours through DynamoDB TTL.
 
 ---
 

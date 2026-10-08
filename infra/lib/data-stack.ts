@@ -51,6 +51,7 @@ export class DataStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST, // free-tier friendly, no idle cost
       removalPolicy,
       pointInTimeRecovery: false,
+      timeToLiveAttribute: 'expiresAt',
     });
 
     // Individual lists their own reports: PK ownerId, sorted by createdAt.
@@ -132,7 +133,12 @@ export class DataStack extends cdk.Stack {
       autoDeleteObjects: true, // prototype teardown convenience
       cors: [
         {
-          allowedMethods: [s3.HttpMethods.PUT, s3.HttpMethods.GET, s3.HttpMethods.HEAD],
+          allowedMethods: [
+            s3.HttpMethods.PUT,
+            s3.HttpMethods.POST,
+            s3.HttpMethods.GET,
+            s3.HttpMethods.HEAD,
+          ],
           allowedOrigins: ['*'], // tightened to the CloudFront origin in Task 6
           allowedHeaders: ['*'],
           maxAge: 3000,

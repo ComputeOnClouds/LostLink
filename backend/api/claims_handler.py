@@ -22,11 +22,13 @@ from __future__ import annotations
 import os
 import sys
 import uuid
+from pathlib import PurePath
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import boto3
 from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.types import TypeSerializer
 
 from pipeline.impl.ddb_mapping import ddb_to_item, now_iso
 
@@ -40,7 +42,11 @@ _MATCHES_TABLE = os.environ.get("MATCHES_TABLE")
 _CLAIMS_TABLE = os.environ.get("CLAIMS_TABLE")
 
 _ddb = boto3.resource("dynamodb")
+_serializer = TypeSerializer()
 _ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "application/pdf"}
+_MAX_EVIDENCE_BYTES = int(os.environ.get("MAX_EVIDENCE_BYTES", str(10 * 1024 * 1024)))
+_MAX_EVIDENCE_PER_MESSAGE = int(os.environ.get("MAX_EVIDENCE_PER_MESSAGE", "5"))
+_MAX_EVIDENCE_PER_CLAIM = int(os.environ.get("MAX_EVIDENCE_PER_CLAIM", "20"))
 
 
 def _items():
@@ -67,7 +73,10 @@ def _list_matches(principal) -> dict:
         IndexName="by-owner",
         KeyConditionExpression=Key("ownerId").eq(principal.user_id),
     ).get("Items", [])
-    my_report_ids = {r["itemId"] for r in reports if r.get("itemType") == "lost"}
+    my_report_ids = {
+        r["itemId"] for r in reports
+        if r.get("itemType") == "lost" and r.get("status") != "withdrawn"
+    }
 
     suggestions = []
     for rid in my_report_ids:
@@ -75,6 +84,11 @@ def _list_matches(principal) -> dict:
             KeyConditionExpression=Key("queryItemId").eq(rid),
         ).get("Items", [])
         for m in rows:
+            if m.get("active", True) is False:
+                continue
+            found = _items().get_item(Key={"itemId": m["candidateItemId"]}).get("Item")
+            if not found or found.get("status") != "available":
+                continue
             suggestions.append({
                 "queryItemId": m["queryItemId"],
                 "candidateItemId": m["candidateItemId"],  # opaque handle for claiming
@@ -94,8 +108,18 @@ def _create_upload_url(principal, body) -> dict:
     content_type = body.get("contentType")
     if content_type not in _ALLOWED_CONTENT_TYPES:
         return error(400, f"contentType must be one of {sorted(_ALLOWED_CONTENT_TYPES)}.")
+    filename = PurePath(str(body.get("fileName") or "evidence")).name[:180]
+    size = int(body.get("size") or 0)
+    if size <= 0 or size > _MAX_EVIDENCE_BYTES:
+        return error(400, f"File size must be between 1 byte and {_MAX_EVIDENCE_BYTES} bytes.")
     key = s3urls.new_photo_key(f"evidence/{principal.user_id}", uuid.uuid4().hex, content_type)
-    return respond(200, {"uploadUrl": s3urls.presign_put(key, content_type), "evidenceKey": key})
+    target = s3urls.presign_post(key, content_type, filename, _MAX_EVIDENCE_BYTES)
+    return respond(200, {
+        "uploadUrl": target["url"],
+        "uploadFields": target["fields"],
+        "evidenceKey": key,
+        "maxBytes": _MAX_EVIDENCE_BYTES,
+    })
 
 
 def _create_claim(principal, body) -> dict:
@@ -109,6 +133,9 @@ def _create_claim(principal, body) -> dict:
         return error(400, "queryItemId and candidateItemId are required.")
     if not evidence_text and not evidence_keys:
         return error(400, "Provide ownership evidence (text and/or an uploaded file).")
+    evidence_error = _validate_new_evidence(principal, evidence_keys)
+    if evidence_error:
+        return evidence_error
 
     # The lost report must be mine, and the match must exist (prevents claiming arbitrary
     # found items — the claimant only ever references a match surfaced to them).
@@ -134,6 +161,7 @@ def _create_claim(principal, body) -> dict:
         "evidenceText": evidence_text or None,
         "evidenceKeys": evidence_keys,
         "messages": [],
+        "revision": 1,
         "createdAt": now,
         "updatedAt": now,
     }
@@ -166,35 +194,67 @@ def _respond_claim(principal, claim_id, body) -> dict:
 
     text = (body.get("message") or "").strip()
     new_keys = body.get("evidenceKeys") or []
-    messages = claim.get("messages", [])
-    if text:
-        messages.append({"from": "claimant", "text": text, "at": now_iso()})
-
-    _claims().update_item(
+    if not text and not new_keys:
+        return error(400, "Add a reply or at least one attachment.")
+    if len(claim.get("evidenceKeys", [])) + len(new_keys) > _MAX_EVIDENCE_PER_CLAIM:
+        return error(400, f"A claim can contain at most {_MAX_EVIDENCE_PER_CLAIM} attachments.")
+    evidence_error = _validate_new_evidence(principal, new_keys)
+    if evidence_error:
+        return evidence_error
+    messages = list(claim.get("messages", []))
+    messages.append({
+        "from": "claimant",
+        "text": text,
+        "at": now_iso(),
+        "attachmentKeys": new_keys,
+    })
+    current_revision = int(claim.get("revision", 0))
+    expected_revision = int(body.get("revision", current_revision))
+    try:
+        _claims().update_item(
         Key={"claimId": claim_id},
-        UpdateExpression="SET #s = :s, messages = :m, evidenceKeys = list_append(if_not_exists(evidenceKeys, :empty), :nk), updatedAt = :u",
+        UpdateExpression="SET #s = :s, messages = :m, evidenceKeys = list_append(if_not_exists(evidenceKeys, :empty), :nk), updatedAt = :u, revision = :nr",
+        ConditionExpression="#s = :es AND (attribute_not_exists(revision) OR revision = :er)",
         ExpressionAttributeNames={"#s": "state"},
         ExpressionAttributeValues={
-            ":s": new_state, ":m": messages, ":nk": new_keys, ":empty": [], ":u": now_iso(),
+            ":s": new_state, ":es": claim["state"], ":m": messages, ":nk": new_keys,
+            ":empty": [], ":u": now_iso(), ":er": expected_revision,
+            ":nr": current_revision + 1,
         },
-    )
-    return respond(200, {"claimId": claim_id, "state": new_state})
+        )
+    except Exception as exc:  # DynamoDB conditional failures are expected conflicts.
+        if _is_conflict(exc):
+            return error(409, "This claim changed in another session. Refresh and review it before replying.")
+        raise
+    return respond(200, {"claimId": claim_id, "state": new_state, "revision": current_revision + 1})
 
 
-def _cancel_claim(principal, claim_id) -> dict:
+def _cancel_claim(principal, claim_id, body=None) -> dict:
     principal.require_individual()
     claim = _load_own_claim(principal, claim_id)
     try:
         new_state = cs.next_state("cancel", claim["state"])
     except cs.InvalidTransition as e:
         return error(409, str(e))
-    _claims().update_item(
+    body = body or {}
+    current_revision = int(claim.get("revision", 0))
+    expected_revision = int(body.get("revision", current_revision))
+    try:
+        _claims().update_item(
         Key={"claimId": claim_id},
-        UpdateExpression="SET #s = :s, updatedAt = :u",
+        UpdateExpression="SET #s = :s, updatedAt = :u, revision = :nr",
+        ConditionExpression="#s = :es AND (attribute_not_exists(revision) OR revision = :er)",
         ExpressionAttributeNames={"#s": "state"},
-        ExpressionAttributeValues={":s": new_state, ":u": now_iso()},
-    )
-    return respond(200, {"claimId": claim_id, "state": new_state})
+        ExpressionAttributeValues={
+            ":s": new_state, ":es": claim["state"], ":u": now_iso(),
+            ":er": expected_revision, ":nr": current_revision + 1,
+        },
+        )
+    except Exception as exc:
+        if _is_conflict(exc):
+            return error(409, "This claim changed in another session. Refresh before cancelling it.")
+        raise
+    return respond(200, {"claimId": claim_id, "state": new_state, "revision": current_revision + 1})
 
 
 # ---- helpers ------------------------------------------------------------------------
@@ -230,37 +290,99 @@ def _staff_transition(principal, claim_id, action, body) -> dict:
 
     messages = claim.get("messages", [])
     note = (body.get("message") or "").strip()
+    if action == "request_info" and not note:
+        return error(400, "Enter the information you need from the claimant.")
     if note:
         messages.append({"from": "staff", "text": note, "at": now_iso()})
-
-    _claims().update_item(
-        Key={"claimId": claim_id},
-        UpdateExpression="SET #s = :s, messages = :m, updatedAt = :u",
-        ExpressionAttributeNames={"#s": "state"},
-        ExpressionAttributeValues={":s": new_state, ":m": messages, ":u": now_iso()},
-    )
-
-    # Reflect approval lifecycle onto the found item's status so it isn't matched/claimed
-    # by others once it's being handed to a verified owner.
-    candidate_id = claim["candidateItemId"]
-    if new_state == cs.STATE_RESERVED:
-        _set_item_status(candidate_id, "reserved")
-    elif new_state == cs.STATE_HANDED_OVER:
-        _set_item_status(candidate_id, "closed")
+    current_revision = int(claim.get("revision", 0))
+    expected_revision = int(body.get("revision", current_revision))
+    updated_at = now_iso()
+    try:
+        if new_state in {cs.STATE_RESERVED, cs.STATE_HANDED_OVER}:
+            _transact_claim_and_item(
+                claim_id=claim_id,
+                candidate_item_id=claim["candidateItemId"],
+                expected_state=claim["state"],
+                new_state=new_state,
+                messages=messages,
+                expected_revision=expected_revision,
+                next_revision=current_revision + 1,
+                updated_at=updated_at,
+            )
+        else:
+            _claims().update_item(
+                Key={"claimId": claim_id},
+                UpdateExpression="SET #s = :s, messages = :m, updatedAt = :u, revision = :nr",
+                ConditionExpression="#s = :es AND (attribute_not_exists(revision) OR revision = :er)",
+                ExpressionAttributeNames={"#s": "state"},
+                ExpressionAttributeValues={
+                    ":s": new_state, ":es": claim["state"], ":m": messages,
+                    ":u": updated_at, ":er": expected_revision, ":nr": current_revision + 1,
+                },
+            )
+    except Exception as exc:
+        if _is_conflict(exc):
+            return error(409, "This claim changed in another session. Refresh before taking action.")
+        raise
 
     # Notify the claimant of the decision (privacy-safe: no item details in the message).
     _notify_claimant(claim, new_state)
 
-    return respond(200, {"claimId": claim_id, "state": new_state})
+    return respond(200, {"claimId": claim_id, "state": new_state, "revision": current_revision + 1})
+
+
+def _transact_claim_and_item(
+    *, claim_id, candidate_item_id, expected_state, new_state, messages,
+    expected_revision, next_revision, updated_at,
+) -> None:
+    """Atomically advance collection state and the found-item lifecycle."""
+    item_status = "reserved" if new_state == cs.STATE_RESERVED else "closed"
+    item_condition = "#s = :available" if item_status == "reserved" else "#s IN (:available, :reserved)"
+
+    def av(values):
+        return {key: _serializer.serialize(value) for key, value in values.items()}
+
+    _ddb.meta.client.transact_write_items(TransactItems=[
+        {
+            "Update": {
+                "TableName": _CLAIMS_TABLE,
+                "Key": {"claimId": {"S": claim_id}},
+                "UpdateExpression": "SET #s = :s, messages = :m, updatedAt = :u, revision = :nr",
+                "ConditionExpression": "#s = :es AND (attribute_not_exists(revision) OR revision = :er)",
+                "ExpressionAttributeNames": {"#s": "state"},
+                "ExpressionAttributeValues": av({
+                    ":s": new_state, ":es": expected_state, ":m": messages,
+                    ":u": updated_at, ":er": expected_revision, ":nr": next_revision,
+                }),
+            }
+        },
+        {
+            "Update": {
+                "TableName": _ITEMS_TABLE,
+                "Key": {"itemId": {"S": candidate_item_id}},
+                "UpdateExpression": "SET #s = :status, revision = if_not_exists(revision, :zero) + :one, updatedAt = :u",
+                "ConditionExpression": item_condition,
+                "ExpressionAttributeNames": {"#s": "status"},
+                "ExpressionAttributeValues": av({
+                    ":status": item_status,
+                    ":available": "available",
+                    **({":reserved": "reserved"} if item_status == "closed" else {}),
+                    ":zero": 0,
+                    ":one": 1,
+                    ":u": updated_at,
+                }),
+            }
+        },
+    ])
 
 
 def _set_item_status(item_id, status) -> None:
     try:
         _items().update_item(
             Key={"itemId": item_id},
-            UpdateExpression="SET #s = :s",
+            UpdateExpression="SET #s = :s, revision = if_not_exists(revision, :zero) + :one, updatedAt = :u",
             ExpressionAttributeNames={"#s": "status"},
-            ExpressionAttributeValues={":s": status},
+            ExpressionAttributeValues={":s": status, ":zero": 0, ":one": 1, ":u": now_iso()},
         )
     except Exception as e:  # noqa: BLE001
         print(f"failed to set item {item_id} status={status}: {e!r}")
@@ -346,17 +468,20 @@ def _staff_claim_view(claim, detailed=False) -> dict:
         "state": claim.get("state"),
         "createdAt": claim.get("createdAt"),
         "updatedAt": claim.get("updatedAt"),
+        "revision": int(claim.get("revision", 0)),
         "evidenceText": claim.get("evidenceText"),
         "evidenceKeys": claim.get("evidenceKeys", []),
     }
     if detailed:
-        view["messages"] = claim.get("messages", [])
+        view["messages"] = _message_views(claim.get("messages", []))
+        view["attachments"] = _attachment_views(claim.get("evidenceKeys", []))
         found = _items().get_item(Key={"itemId": claim["candidateItemId"]}).get("Item")
         if found:
             view["item"] = {
                 "description": found.get("description"),
                 "locationZone": found.get("locationZone"),
                 "photoKey": found.get("photoKey"),
+                "photoUrl": s3urls.presign_get(found["photoKey"]) if found.get("photoKey") else None,
                 "status": found.get("status"),
             }
     return view
@@ -383,10 +508,12 @@ def _claim_view(claim, detailed=False) -> dict:
         "state": state,
         "createdAt": claim.get("createdAt"),
         "updatedAt": claim.get("updatedAt"),
+        "revision": int(claim.get("revision", 0)),
     }
     if detailed:
         view["evidenceText"] = claim.get("evidenceText")
-        view["messages"] = claim.get("messages", [])
+        view["messages"] = _message_views(claim.get("messages", []))
+        view["attachments"] = _attachment_views(claim.get("evidenceKeys", []))
 
     if cs.details_visible(state):
         # Ownership verified — now safe to reveal the found item + collection info.
@@ -396,6 +523,7 @@ def _claim_view(claim, detailed=False) -> dict:
                 "description": found.get("description"),
                 "locationZone": found.get("locationZone"),
                 "photoKey": found.get("photoKey"),
+                "photoUrl": s3urls.presign_get(found["photoKey"]) if found.get("photoKey") else None,
                 "status": found.get("status"),
             }
         view["collection"] = (
@@ -404,6 +532,60 @@ def _claim_view(claim, detailed=False) -> dict:
     else:
         view["item"] = None  # hidden until approval (privacy core)
     return view
+
+
+def _validate_new_evidence(principal, keys) -> dict | None:
+    if not isinstance(keys, list) or len(keys) > _MAX_EVIDENCE_PER_MESSAGE:
+        return error(400, f"Attach at most {_MAX_EVIDENCE_PER_MESSAGE} files at a time.")
+    expected_prefix = f"evidence/{principal.user_id}/"
+    for key in keys:
+        if not isinstance(key, str) or not key.startswith(expected_prefix):
+            return error(403, "An attachment does not belong to this account.")
+        try:
+            meta = s3urls.head(key)
+        except Exception:
+            return error(400, "An uploaded attachment could not be found. Upload it again.")
+        content_type = (meta.get("ContentType") or "").lower()
+        size = int(meta.get("ContentLength") or 0)
+        if content_type not in _ALLOWED_CONTENT_TYPES or size <= 0 or size > _MAX_EVIDENCE_BYTES:
+            return error(400, "An attachment has an unsupported type or size.")
+    return None
+
+
+def _attachment_views(keys) -> list[dict]:
+    views = []
+    for key in keys or []:
+        fallback = key.rsplit("/", 1)[-1] or "attachment"
+        try:
+            meta = s3urls.head(key)
+            filename = (meta.get("Metadata") or {}).get("original-filename") or fallback
+            content_type = meta.get("ContentType") or "application/octet-stream"
+            size = int(meta.get("ContentLength") or 0)
+            url = s3urls.presign_get(key)
+        except Exception:
+            filename, content_type, size, url = fallback, "application/octet-stream", 0, None
+        views.append({
+            "attachmentId": key,
+            "filename": filename,
+            "contentType": content_type,
+            "size": size,
+            "downloadUrl": url,
+        })
+    return views
+
+
+def _message_views(messages) -> list[dict]:
+    result = []
+    for message in messages or []:
+        view = {k: message.get(k) for k in ("from", "text", "at")}
+        view["attachments"] = _attachment_views(message.get("attachmentKeys", []))
+        result.append(view)
+    return result
+
+
+def _is_conflict(exc: Exception) -> bool:
+    text = f"{type(exc).__name__} {exc}"
+    return "ConditionalCheckFailed" in text or "TransactionCanceled" in text
 
 
 # ---- entry point --------------------------------------------------------------------
@@ -429,7 +611,7 @@ def handler(event, _context=None):
         if rk == "POST /claims/{claimId}/respond":
             return _respond_claim(principal, claim_id, parse_body(event))
         if rk == "POST /claims/{claimId}/cancel":
-            return _cancel_claim(principal, claim_id)
+            return _cancel_claim(principal, claim_id, parse_body(event))
 
         # Staff routes (Task 12).
         if rk == "GET /org/claims":

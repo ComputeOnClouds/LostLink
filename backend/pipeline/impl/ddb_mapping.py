@@ -36,6 +36,7 @@ def item_to_ddb(item: Item, created_at: str | None = None) -> dict[str, Any]:
         "ownerId": item.owner_id,
         "status": item.status,
         "createdAt": created,
+        "revision": item.revision,
         # Derived key for the by-org-type GSI (staff inventory, org-scoped).
         "orgType": org_type_key(item.organisation_id, item.item_type),
     }
@@ -49,6 +50,12 @@ def item_to_ddb(item: Item, created_at: str | None = None) -> dict[str, Any]:
         ddb["eventTime"] = item.event_time
     if item.photo_key is not None:
         ddb["photoKey"] = item.photo_key
+    if item.description_source:
+        ddb["descriptionSource"] = item.description_source
+    if item.description_photo_key is not None:
+        ddb["descriptionPhotoKey"] = item.description_photo_key
+    if item.description_generated_at is not None:
+        ddb["descriptionGeneratedAt"] = item.description_generated_at
     if item.vectors.has_text():
         ddb["vecText"] = json.dumps(item.vectors.text)
     if item.vectors.has_image():
@@ -75,6 +82,10 @@ def ddb_to_item(ddb: dict[str, Any]) -> Item:
         photo_key=ddb.get("photoKey"),
         vectors=vectors,
         status=ddb.get("status", "pending_match"),
+        description_source=ddb.get("descriptionSource", "unknown"),
+        description_photo_key=ddb.get("descriptionPhotoKey"),
+        description_generated_at=ddb.get("descriptionGeneratedAt"),
+        revision=int(ddb.get("revision", 0)),
     )
 
 
