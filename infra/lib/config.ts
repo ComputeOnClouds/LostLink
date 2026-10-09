@@ -17,6 +17,7 @@ export interface MatchConfig {
   readonly threshold: string;
   /** Which CandidateRetriever the worker uses (bruteforce | ann). */
   readonly retriever: string;
+  readonly locationHalfDistanceMetres: string;
 }
 
 export interface LostLinkConfig {
@@ -57,6 +58,7 @@ export const config: LostLinkConfig = {
     weightTime: '0.15',
     threshold: '0.7',
     retriever: 'bruteforce',
+    locationHalfDistanceMetres: process.env.LOCATION_HALF_DISTANCE_METRES ?? '500',
   },
   // Placeholder sender; set a real verified address via SENDER_EMAIL to actually send.
   senderEmail: process.env.SENDER_EMAIL ?? 'no-reply@lostlink.example',

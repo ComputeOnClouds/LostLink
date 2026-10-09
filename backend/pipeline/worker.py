@@ -28,6 +28,7 @@ from .models import (
 )
 from . import factory
 from .impl.ddb_mapping import now_iso
+from .location import within_search_radius
 
 
 class MatchWorker:
@@ -111,6 +112,8 @@ class MatchWorker:
             if item.item_type is ItemType.FOUND and hasattr(self.repository, "deactivate_match"):
                 self.repository.deactivate_match(candidate.item_id, item.item_id)
             if candidate.status in INACTIVE_STATUSES:
+                continue
+            if not within_search_radius(item, candidate):
                 continue
             if not candidate.vectors.has_text():
                 # Candidate not yet enriched; it will match when its own job runs.

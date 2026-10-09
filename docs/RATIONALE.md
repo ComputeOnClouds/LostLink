@@ -131,7 +131,7 @@ Future Work.
 
 ---
 
-## ADR-007: Location as fixed campus/zone identifiers
+## ADR-007: Location as fixed campus/zone identifiers (superseded by ADR-027)
 
 **What:** Locations are a fixed set of campus/zone identifiers rather than free-text
 geocoded coordinates. Spatial similarity is a zone-based decay function inside the
@@ -653,3 +653,32 @@ ID token carries `cognito:groups=[Individual]` and no organisation).
 sender (a per-day cap applies on the default sender). This is independent of the SES
 sandbox that gates LostLink's own match/claim notifications, so real self-registrations
 receive their confirmation code even while SES is in sandbox.
+
+
+## ADR-027: OneMap search with persistent WGS84 points and local distance matching
+
+**What:** Replace new zone-only entry with a shared search/map picker. An authenticated
+Lambda proxies SLA OneMap search; credentials live in Secrets Manager and tokens stay
+server-side. Leaflet displays OneMap tiles. Store user-confirmed WGS84 latitude/longitude
+as DynamoDB Numbers alongside display labels and provenance. Existing zones remain a
+backward-compatible fallback; no automatic geocoding migration guesses old locations.
+
+**Why:** Singapore-specific coverage and free-to-use APIs fit the prototype. The
+Singapore Open Data Licence supports stored/reused data with attribution. Public OSM
+Nominatim prohibits autocomplete. Standard Google Places terms limit coordinate caching
+to 30 days, complicating persistent matching; Geoapify is a possible alternative if
+OneMap venue coverage proves insufficient. Live coverage remains a pre-merge check.
+
+**Matching:** Pure Haversine distance feeds an exponential location score, initially
+`0.5 ** (distance_metres / 500)`. Retain existing blend weights and make half-distance
+configurable. Only an explicitly chosen lost-report radius is a hard filter, enforced
+in both job orientations. Distance is otherwise a ranking signal because items can move.
+Unknown coordinates cannot pass a strict radius. The evaluation harness uses the same
+location and radius fields. Old zone datasets do not validate geographic tuning.
+
+**Alternatives:** PostGIS geography with GiST indexes would suit large spatial workloads,
+but a database migration is unnecessary at prototype scale. A later DynamoDB geohash/grid
+index must query all radius-intersecting cells and then filter by exact distance.
+
+See [location flow](flows/location.md) for setup, limits, attribution, compatibility
+and Harsh's required live checks. This supersedes ADR-007 for newly selected locations.

@@ -304,3 +304,37 @@ p.hint { margin: -.35rem 0 .8rem; color: var(--muted); font-size: .78rem; }
   :root { --line: #8aa69f; --line-strong: #607e77; --muted: #425c56; --focus: #003f39; }
   .topbar, .panel-header { background: var(--surface); backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
+
+/* Location picker inherits the editor's form controls and brand palette. */
+.location-picker { position: relative; min-width: 0; margin-bottom: 1.25rem; }
+.location-picker .field { margin-bottom: .4rem; }
+.location-picker input::placeholder { color: var(--muted); }
+.location-results { position: absolute; top: 4.65rem; left: 0; right: 0; z-index: 5; max-height: 19rem; overflow-y: auto; margin: 0; padding: .3rem; list-style: none; border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow-lg); }
+.location-results[hidden] { display: none; }
+.location-results li { padding: .7rem; cursor: pointer; border-radius: 7px; overflow-wrap: anywhere; }
+.location-results li:hover, .location-results li[aria-selected="true"] { color: var(--brand-active); background: var(--brand-tint); }
+.location-results strong, .location-results span { display: block; }
+.location-results strong { font-size: .88rem; }
+.location-results span { margin-top: .2rem; color: var(--ink-soft); font-size: .8rem; }
+.location-help, .location-status { margin: .4rem 0; overflow-wrap: anywhere; }
+.location-map-wrap { margin-top: .8rem; }
+.location-map-wrap > .meta { margin-bottom: .5rem; }
+.location-map, .location-map-loading { width: 100%; height: 16rem; border-radius: var(--radius-sm); background: var(--canvas-tint); }
+.location-map { z-index: 0; }
+.location-map-loading { display: grid; place-items: center; color: var(--ink-soft); }
+.location-map .leaflet-control-attribution { font-size: .65rem; color: var(--ink); }
+.location-map .leaflet-control a { color: var(--brand-ink); }
+.location-map.leaflet-container .leaflet-control-zoom a { width: 40px; height: 40px; line-height: 40px; }
+.location-pin svg { display: block; width: 30px; height: 40px; }
+.location-pin:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.location-coordinates { margin-top: .7rem; }
+.location-coordinates summary { width: fit-content; min-height: 2.75rem; padding: .5rem 0; color: var(--brand-ink); font-size: .83rem; cursor: pointer; }
+.location-coordinates summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.location-coordinate-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+.location-note { margin-top: .85rem; }
+.location-attribution { margin: .65rem 0 0; font-size: .72rem; line-height: 1.5; color: var(--ink-soft); }
+@media (max-width: 40rem) {
+  .location-results li { min-height: 2.75rem; }
+  .location-coordinate-fields { grid-template-columns: 1fr; }
+  .location-map.leaflet-container .leaflet-control-zoom a { width: 44px; height: 44px; line-height: 44px; }
+}

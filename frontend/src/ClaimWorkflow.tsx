@@ -214,7 +214,7 @@ export function ClaimDetailPanel({
                   <h3>Verified item</h3>
                   {claim.item.photoUrl && <img className="photo-preview" src={claim.item.photoUrl} alt="Verified found item" />}
                   <DescriptionBlock description={claim.item.description} />
-                  <p className="meta">{claim.item.locationZone}</p>
+                  <p className="meta">{claim.item.location?.name || claim.item.locationZone}</p>
                   {claim.collection && <p>{claim.collection}</p>}
                 </section>
               )}

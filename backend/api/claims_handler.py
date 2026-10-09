@@ -480,6 +480,7 @@ def _staff_claim_view(claim, detailed=False) -> dict:
             view["item"] = {
                 "description": found.get("description"),
                 "locationZone": found.get("locationZone"),
+                "location": found.get("location"),
                 "photoKey": found.get("photoKey"),
                 "photoUrl": s3urls.presign_get(found["photoKey"]) if found.get("photoKey") else None,
                 "status": found.get("status"),
@@ -522,6 +523,7 @@ def _claim_view(claim, detailed=False) -> dict:
             view["item"] = {
                 "description": found.get("description"),
                 "locationZone": found.get("locationZone"),
+                "location": found.get("location"),
                 "photoKey": found.get("photoKey"),
                 "photoUrl": s3urls.presign_get(found["photoKey"]) if found.get("photoKey") else None,
                 "status": found.get("status"),

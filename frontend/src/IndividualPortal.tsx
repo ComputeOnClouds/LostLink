@@ -67,7 +67,7 @@ export function IndividualPortal({ api }: { api: ApiClient }) {
                       <DescriptionBlock description={report.description} />
                       <span className={`badge ${report.status}`}>{reportStatusLabel(report.status)}</span>
                     </div>
-                    <div className="meta">{report.locationZone} · {formatLocalTime(report.eventTime)}</div>
+                    <div className="meta">{report.location?.name || report.locationZone} · {formatLocalTime(report.eventTime)}</div>
                     <div className="btn-row">
                       {report.status !== 'withdrawn' && (
                         <button type="button" className="secondary sm" onClick={async () => setEditing(await api.getReport(report.itemId))}>Edit</button>
