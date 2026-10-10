@@ -65,7 +65,7 @@ export class ApiStack extends cdk.Stack {
       secretsmanager.Secret.fromSecretCompleteArn(this, 'OneMapCredentials', oneMapSecretArn)
         .grantRead(locationsFn);
     }
-    this.httpApi.addRoutes({
+    const locationRoutes = this.httpApi.addRoutes({
       path: '/locations/search',
       methods: [apigwv2.HttpMethod.GET],
       integration: new apigwv2int.HttpLambdaIntegration('LocationsIntegration', locationsFn),
@@ -73,6 +73,8 @@ export class ApiStack extends cdk.Stack {
     });
     // Best-effort aggregate route throttle below published OneMap call limits.
     const apiStage = this.httpApi.defaultStage?.node.defaultChild as apigwv2.CfnStage;
+    // API Gateway rejects per-route settings until the referenced route exists.
+    apiStage.addDependency(locationRoutes[0].node.defaultChild as apigwv2.CfnRoute);
     apiStage.addPropertyOverride('RouteSettings', {
       'GET /locations/search': { ThrottlingRateLimit: 3, ThrottlingBurstLimit: 5 },
     });

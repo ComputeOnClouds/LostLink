@@ -109,9 +109,32 @@ The evaluation harness accepts the same `location` and `searchRadiusMetres` fiel
 `LOCATION_HALF_DISTANCE_METRES` also configures its scorer. Old sample datasets still
 exercise zone matching; do not interpret passing those as coordinate-quality evidence.
 
-## Verification before merge — Harsh
+## Verification
 
-**DO NOT MERGE until Harsh Reviews and tests it.**
+### AWS deployment verification — 10 October 2026
+
+Deployed the API, matching worker and frontend in `ap-southeast-1` and verified
+the live application at https://d14j9ujywx75yh.cloudfront.net. OneMap account
+credentials are configured in Secrets Manager with read permission scoped to
+the location-search function; the server obtains and renews its own tokens.
+Keep `ONEMAP_SECRET_ARN` set when redeploying the API stack.
+
+- 113 backend/evaluation tests passed; frontend build, infrastructure TypeScript
+  checks and CDK synthesis passed.
+- 29 live checks passed for authenticated APIs, DynamoDB numeric coordinates,
+  asynchronous embeddings/rematching, radius filtering in both directions,
+  label-only edits, legacy items and claim/location privacy.
+- Browser verification confirmed OneMap suggestions for `Ces` and `Central Library`,
+  suggestion coordinate autofill, manual selection and saved edits after reload.
+- Fixed API-stage deployment ordering so the location route exists before its
+  throttle settings are applied. QA claims were cancelled and QA items withdrawn.
+
+Harsh has requested that this PR be marked ready for merge, pending reviewer approval.
+Email delivery remains unverified because this account has no verified SES sender.
+Full venue/postal-code coverage, live expiry/renewal over time, provider quota,
+mobile behavior and coordinate-labelled score calibration remain follow-up checks.
+
+### Reproducing checks
 
 Offline checks:
 
@@ -132,7 +155,13 @@ The browser tests run a local fixture using the real editor and mocked search/sa
 responses; tile requests are aborted deliberately to verify fallback behavior. They
 do not test live OneMap coverage or AWS authorization.
 
-After configuring credentials in a test deployment:
+Run `scripts/verify_location_live.py` from the repository root with `APP_URL`,
+`USER_EMAIL`, `USER_PASSWORD`, `STAFF_EMAIL` and `STAFF_PASSWORD` set for existing
+demo accounts. It uses AWS credentials in `ap-southeast-1`, requires a configured
+OneMap secret, creates QA data and soft-withdraws its own records on exit.
+It requires permission to invoke `LostLink-MatchWorker` and read the item/match tables.
+
+Additional coverage after configuring credentials in a test deployment:
 
 - Search partial/full names for Central Library, VivoCity, an MRT station, a park,
   a street address and a six-digit postal code. Verify relevance, latency and pin position.
