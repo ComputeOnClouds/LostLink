@@ -7,7 +7,8 @@ score = w_text*textSim + w_image*imageSim + w_location*spatialSim + w_time*tempo
 - textSim / imageSim: cosine similarity of the respective vectors, mapped to [0,1].
   Image term is only non-zero when BOTH items carry an image vector, so raising
   ``w_image`` later (Option 2, RATIONALE ADR-003/004) is sufficient to enable it.
-- spatialSim: 1.0 if the location zones match, else a configurable low value.
+- spatialSim: exponential geographic distance decay when both points exist;
+  legacy zone equality otherwise, or absent when no comparable locations exist.
 - temporalSim: exponential decay in the absolute time difference (a lost item is more
   likely the found item if they occurred close in time).
 
@@ -22,6 +23,7 @@ from datetime import datetime
 
 from ..interfaces import Scorer
 from ..models import Item, MatchResult, VectorMap
+from ..location import distance_metres
 
 
 def _cosine(a: list[float] | None, b: list[float] | None) -> float | None:
@@ -37,7 +39,9 @@ def _cosine(a: list[float] | None, b: list[float] | None) -> float | None:
     return max(0.0, min(1.0, (cos + 1.0) / 2.0))
 
 
-def _spatial(a: Item, b: Item, mismatch: float = 0.1) -> float | None:
+def _spatial(a: Item, b: Item, mismatch: float = 0.1, half_distance_metres: float = 500.0) -> float | None:
+    if a.location and b.location:
+        return math.pow(0.5, distance_metres(a.location, b.location) / half_distance_metres)
     if not a.location_zone or not b.location_zone:
         return None
     return 1.0 if a.location_zone == b.location_zone else mismatch
@@ -62,6 +66,11 @@ def _parse_time(s: str | None):
 
 
 class BlendedScorer(Scorer):
+    def __init__(self, half_distance_metres: float = 500.0):
+        if not math.isfinite(half_distance_metres) or half_distance_metres <= 0:
+            raise ValueError("Location half-distance must be a positive finite number.")
+        self.half_distance_metres = half_distance_metres
+
     def score(self, a: Item, b: Item, weights: dict[str, float]) -> MatchResult:
         components: dict[str, tuple[float, float]] = {}  # name -> (similarity, weight)
 
@@ -73,7 +82,7 @@ class BlendedScorer(Scorer):
         if image_sim is not None:
             components["image"] = (image_sim, weights.get("image", 0.0))
 
-        spatial = _spatial(a, b)
+        spatial = _spatial(a, b, half_distance_metres=self.half_distance_metres)
         if spatial is not None:
             components["location"] = (spatial, weights.get("location", 0.0))
 

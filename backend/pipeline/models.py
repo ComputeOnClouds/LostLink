@@ -69,6 +69,20 @@ class VectorMap:
 
 
 @dataclass
+class ItemLocation:
+    """User-confirmed WGS84 point; display labels never determine distance."""
+
+    name: str
+    latitude: float
+    longitude: float
+    address: Optional[str] = None
+    provider: str = "manual"
+    selection_method: str = "map"
+    provider_place_id: Optional[str] = None
+    note: Optional[str] = None
+
+
+@dataclass
 class Item:
     """A lost report or a found item, as seen by the pipeline.
 
@@ -95,6 +109,8 @@ class Item:
     # User/API revision. Async enrichment may save against this value but must never
     # overwrite a row whose revision has moved on.
     revision: int = 0
+    location: Optional[ItemLocation] = None
+    search_radius_metres: Optional[int] = None  # lost reports only; None = any distance
 
 
 @dataclass

@@ -24,10 +24,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 from pipeline.models import Item, ItemType, VectorMap  # noqa: E402
 from pipeline.impl.scorer import BlendedScorer  # noqa: E402
+from pipeline.location import location_from_dict, within_search_radius  # noqa: E402
 
 from metrics import RankedQuery, hit_at_1, recall_at_k, mrr, notification_metrics  # noqa: E402
 
-_scorer = BlendedScorer()
+_scorer = BlendedScorer(float(os.environ.get("LOCATION_HALF_DISTANCE_METRES", "500")))
 
 # Weight variants compared in the evaluation (RATIONALE ADR-004). Image variants are
 # reserved for when Option 2 is enabled.
@@ -46,6 +47,8 @@ def _to_item(rec: dict, item_type: ItemType) -> Item:
         owner_id="eval",
         description=rec.get("description"),
         location_zone=rec.get("locationZone"),
+        location=location_from_dict(rec.get("location")),
+        search_radius_metres=rec.get("searchRadiusMetres"),
         event_time=rec.get("eventTime"),
         vectors=VectorMap(text=rec.get("vecText")),
     )
@@ -59,6 +62,8 @@ def rank_variant(dataset: dict, weights: dict[str, float]) -> list[RankedQuery]:
         lost = _to_item(lost_rec, ItemType.LOST)
         scored = []
         for f in found_items:
+            if not within_search_radius(lost, f):
+                continue
             r = _scorer.score(lost, f, weights)
             scored.append((f.item_id, r.score))
         scored.sort(key=lambda t: t[1], reverse=True)

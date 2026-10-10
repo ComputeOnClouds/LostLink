@@ -72,7 +72,7 @@ def make_retriever(repository: ItemRepository) -> CandidateRetriever:
 def make_scorer() -> Scorer:
     choice = os.environ.get("SCORER", "blended").lower()
     if choice == "blended":
-        return BlendedScorer()
+        return BlendedScorer(float(os.environ.get("LOCATION_HALF_DISTANCE_METRES", "500")))
     raise ValueError(f"Unknown SCORER implementation: {choice!r}")
 
 

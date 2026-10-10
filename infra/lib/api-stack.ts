@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as path from 'path';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigwv2int from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as apigwv2auth from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
@@ -53,6 +54,30 @@ export class ApiStack extends cdk.Stack {
       props.auth.userPool,
       { userPoolClients: [props.auth.userPoolClient] }
     );
+
+    // OneMap account credentials are held in an existing Secrets Manager secret.
+    // Without an ARN, map picking still works and search returns a recoverable 503.
+    const oneMapSecretArn = process.env.ONEMAP_SECRET_ARN;
+    const locationsFn = this.pythonHandler('LocationsFn', 'api.locations_handler.handler', {
+      ...(oneMapSecretArn ? { ONEMAP_SECRET_ARN: oneMapSecretArn } : {}),
+    });
+    if (oneMapSecretArn) {
+      secretsmanager.Secret.fromSecretCompleteArn(this, 'OneMapCredentials', oneMapSecretArn)
+        .grantRead(locationsFn);
+    }
+    const locationRoutes = this.httpApi.addRoutes({
+      path: '/locations/search',
+      methods: [apigwv2.HttpMethod.GET],
+      integration: new apigwv2int.HttpLambdaIntegration('LocationsIntegration', locationsFn),
+      authorizer: this.authorizer,
+    });
+    // Best-effort aggregate route throttle below published OneMap call limits.
+    const apiStage = this.httpApi.defaultStage?.node.defaultChild as apigwv2.CfnStage;
+    // API Gateway rejects per-route settings until the referenced route exists.
+    apiStage.addDependency(locationRoutes[0].node.defaultChild as apigwv2.CfnRoute);
+    apiStage.addPropertyOverride('RouteSettings', {
+      'GET /locations/search': { ThrottlingRateLimit: 3, ThrottlingBurstLimit: 5 },
+    });
 
     // ---- Individual lost-item reporting handler (Task 4) --------------------------
     const reportsFn = this.pythonHandler('ReportsFn', 'api.reports_handler.handler', {

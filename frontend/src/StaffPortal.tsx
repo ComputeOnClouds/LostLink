@@ -80,7 +80,7 @@ export function StaffPortal({ api, organisationId }: { api: ApiClient; organisat
                       <DescriptionBlock description={item.description} />
                       <span className={`badge ${item.status}`}>{itemStatusLabel(item.status)}</span>
                     </div>
-                    <div className="meta">{item.locationZone} · {formatLocalTime(item.eventTime)}</div>
+                    <div className="meta">{item.location?.name || item.locationZone} · {formatLocalTime(item.eventTime)}</div>
                     <div className="btn-row">
                       {item.status === 'available' && (
                         <button type="button" className="secondary sm" onClick={async () => setEditing(await api.getItem(item.itemId))}>Edit</button>

@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..models import Item, ItemType, VectorMap, MatchResult
+from ..location import location_to_dict, location_from_dict
 
 
 def now_iso() -> str:
@@ -46,6 +47,12 @@ def item_to_ddb(item: Item, created_at: str | None = None) -> dict[str, Any]:
         ddb["description"] = item.description
     if item.location_zone is not None:
         ddb["locationZone"] = item.location_zone
+    if item.location is not None:
+        ddb["location"] = location_to_dict(item.location)
+        for coordinate in ("latitude", "longitude"):
+            ddb["location"][coordinate] = _to_decimal_safe(ddb["location"][coordinate])
+    if item.search_radius_metres is not None:
+        ddb["searchRadiusMetres"] = item.search_radius_metres
     if item.event_time is not None:
         ddb["eventTime"] = item.event_time
     if item.photo_key is not None:
@@ -86,6 +93,8 @@ def ddb_to_item(ddb: dict[str, Any]) -> Item:
         description_photo_key=ddb.get("descriptionPhotoKey"),
         description_generated_at=ddb.get("descriptionGeneratedAt"),
         revision=int(ddb.get("revision", 0)),
+        location=location_from_dict(ddb.get("location")),
+        search_radius_metres=int(ddb["searchRadiusMetres"]) if ddb.get("searchRadiusMetres") is not None else None,
     )
 
 

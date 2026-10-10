@@ -272,3 +272,5 @@ Cognito. `IndividualPortal` and `StaffPortal` are role-gated on the `cognito:gro
 - `docs/RATIONALE.md` — architecture decision records (ADRs).
 - `docs/ARCHITECTURE.md` — architecture- and class-level interaction diagrams + contracts.
 - `docs/RUNBOOK.md` — deploy-to-any-account procedure + troubleshooting.
+- [`docs/flows/location.md`](docs/flows/location.md) — OneMap credential setup, location
+  picker, DynamoDB coordinates, distance/radius matching and Harsh's pre-merge checks.
