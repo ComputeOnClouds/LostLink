@@ -108,8 +108,11 @@ denominator; score stays in 0–1).
 
 - **textSim / imageSim** — cosine similarity remapped `[-1,1] → [0,1]` via `(cos+1)/2`.
   Image is 0 today (`w_image = 0`).
-- **spatialSim** (`_spatial`) — `1.0` if the two `location_zone` strings are **exactly**
-  equal, else `0.1`. (This exact-match is why `central library` vs `central-lib` = 0.1.)
+- **spatialSim** (`_spatial`) — when both items have WGS84 points, Haversine distance
+  feeds `0.5 ** (distance_metres / half_distance_metres)` (default 500 m, configured by
+  `LOCATION_HALF_DISTANCE_METRES`). Otherwise legacy zones score `1.0` on equality,
+  else `0.1`; absent comparable locations omit the term. See [location.md](location.md)
+  for autocomplete, storage, explicit radius filtering and compatibility.
 - **temporalSim** (`_temporal`) — `0.5 ** (hours / 72)`; `1.0` at the same instant.
 
 Defaults (`infra/lib/config.ts`): text `0.6`, image `0.0`, location `0.25`, time `0.15`;
@@ -135,6 +138,9 @@ wsl -d Ubuntu bash ~/ComputeOnClouds/scripts/score_debug.sh
 
 - `BruteForceRetriever` loads **all** opposing-type items; the Scorer scores each. Exact,
   fine at prototype scale. DynamoDB does no similarity ranking — it is just the store.
+- Before scoring, the worker applies any explicit radius on the lost report, in both
+  job orientations. Unknown coordinates cannot pass a strict radius. No radius keeps
+  proximity as a ranking signal.
 - Cross-org retrieval queries the `by-type` GSI, paginates, drops the query item itself.
 - `AnnRetriever` is a documented scaling stub (vector index → coarse top-K → Scorer
   re-ranks). Selectable via `RETRIEVER=ann` once built (ADR-006).

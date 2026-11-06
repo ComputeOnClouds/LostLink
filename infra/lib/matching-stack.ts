@@ -67,6 +67,7 @@ export class MatchingStack extends cdk.Stack {
         WEIGHT_LOCATION: m.weightLocation,
         WEIGHT_TIME: m.weightTime,
         MATCH_THRESHOLD: m.threshold,
+        LOCATION_HALF_DISTANCE_METRES: m.locationHalfDistanceMetres,
         // Notifications (Task 10). SENDER_EMAIL must be a verified SES identity.
         SENDER_EMAIL: props.notification.senderEmail,
         CLOUDFRONT_URL: props.config.cloudFrontUrl, // linked in the match email

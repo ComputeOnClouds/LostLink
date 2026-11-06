@@ -38,3 +38,19 @@ def test_all_variants_present():
     ds = load_dataset(SAMPLE)
     reports = evaluate(ds, threshold=0.7)
     assert {r.variant for r in reports} == set(VARIANTS.keys())
+
+
+def test_geographic_ranking_uses_coordinates_and_explicit_radius():
+    point = {"name": "Library", "latitude": 1.3, "longitude": 103.8}
+    ds = {
+        "lost": [{"id": "lost", "location": point, "vecText": [1, 0], "truth": "near"}],
+        "found": [
+            {"id": "far", "location": {**point, "latitude": 1.32}, "vecText": [1, 0]},
+            {"id": "near", "location": {**point, "name": "Different label"}, "vecText": [1, 0]},
+            {"id": "unknown", "vecText": [1, 0]},
+        ],
+    }
+    ranked = rank_variant(ds, VARIANTS["text_location"])[0]
+    assert ranked.ranked.index("near") < ranked.ranked.index("far")
+    ds["lost"][0]["searchRadiusMetres"] = 500
+    assert rank_variant(ds, VARIANTS["text_location"])[0].ranked == ["near"]

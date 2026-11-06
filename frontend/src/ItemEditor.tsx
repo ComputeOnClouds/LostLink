@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { ApiClient, DescriptionSource, GeneratedDescription, ItemWrite, Report } from './api';
+import { ApiClient, DescriptionSource, GeneratedDescription, ItemLocation, ItemWrite, Report } from './api';
+import { LocationPicker } from './LocationPicker';
 import { DescriptionDisclosure } from './DescriptionDisclosure';
 import { isoToLocalInput, nowLocal } from './time';
 
@@ -21,6 +22,9 @@ export function ItemEditor({
   const disclosureId = useId();
   const [description, setDescription] = useState(initial?.description || '');
   const [locationZone, setLocationZone] = useState(initial?.locationZone || '');
+  const [location, setLocation] = useState<ItemLocation | null>(initial?.location || null);
+  const [locationReset, setLocationReset] = useState(0);
+  const [searchRadius, setSearchRadius] = useState<number | null>(initial?.searchRadiusMetres ?? null);
   const [eventTime, setEventTime] = useState(initial ? isoToLocalInput(initial.eventTime) : nowLocal());
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoKey, setPhotoKey] = useState<string | null>(initial?.photoKey || null);
@@ -102,6 +106,18 @@ export function ItemEditor({
       setError('Add a description or a photo.');
       return;
     }
+    if (!location && !locationZone.trim()) {
+      setError('Choose a location suggestion or set a point on the map.');
+      return;
+    }
+    if (location && !location.name.trim()) {
+      setError('Name the location before saving.');
+      return;
+    }
+    if (searchRadius !== null && !location) {
+      setError('Choose a confirmed location before setting a distance limit.');
+      return;
+    }
     if (generated && !description.trim()) {
       setError('Use the generated description, cancel the preview, or type your own before saving.');
       return;
@@ -110,7 +126,9 @@ export function ItemEditor({
     try {
       const input: ItemWrite = {
         description: description.trim() || undefined,
-        locationZone: locationZone.trim(),
+        locationZone: locationZone.trim() || null,
+        location,
+        ...(kind === 'report' ? { searchRadiusMetres: searchRadius } : {}),
         eventTime: eventTime ? new Date(eventTime).toISOString() : undefined,
         photoKey,
         descriptionSource: source,
@@ -125,6 +143,9 @@ export function ItemEditor({
       if (!initial) {
         setDescription('');
         setLocationZone('');
+        setLocation(null);
+        setSearchRadius(null);
+        setLocationReset((version) => version + 1);
         setEventTime(nowLocal());
         setPhotoFile(null);
         setPhotoKey(null);
@@ -147,6 +168,8 @@ export function ItemEditor({
   const dirty = Boolean(initial && (
     description !== (initial.description || '')
     || locationZone !== (initial.locationZone || '')
+    || JSON.stringify(location) !== JSON.stringify(initial.location || null)
+    || searchRadius !== (initial.searchRadiusMetres ?? null)
     || eventTime !== isoToLocalInput(initial.eventTime)
     || photoKey !== initial.photoKey
   ));
@@ -172,10 +195,20 @@ export function ItemEditor({
       </label>
       <DescriptionDisclosure id={disclosureId} />
 
-      <label className="field">
-        <span>Location zone*</span>
-        <input value={locationZone} onChange={(event) => setLocationZone(event.target.value)} required placeholder="e.g. zone-central-library" />
-      </label>
+      <LocationPicker key={initial?.itemId || `new-${kind}-${locationReset}`}
+        api={api} kind={kind} value={location} onChange={setLocation}
+        legacyZone={locationZone} onReplaceLegacy={() => setLocationZone('')} />
+      {kind === 'report' && <label className="field">
+        <span>Search within</span>
+        <select value={searchRadius ?? ''} onChange={(event) => setSearchRadius(event.target.value ? Number(event.target.value) : null)}>
+          <option value="">Any distance — rank by proximity</option>
+          <option value="500">500 metres</option>
+          <option value="1000">1 kilometre</option>
+          <option value="2000">2 kilometres</option>
+          <option value="5000">5 kilometres</option>
+        </select>
+        {searchRadius !== null && <p className="meta">Only found items with coordinates inside this radius will be considered.</p>}
+      </label>}
       <label className="field">
         <span>{kind === 'report' ? 'Approx. time lost' : 'Time found'}</span>
         <input type="datetime-local" value={eventTime} onChange={(event) => setEventTime(event.target.value)} />

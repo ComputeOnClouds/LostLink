@@ -34,6 +34,8 @@ from pipeline.impl.ddb_mapping import item_to_ddb, ddb_to_item, now_iso, org_typ
 from .auth import principal_from_event, AuthError
 from .responses import respond, error, parse_body, route_key, path_param
 from . import s3urls
+from .location_validation import parse_location, parse_radius
+from pipeline.location import location_to_dict
 
 _ITEMS_TABLE = os.environ.get("ITEMS_TABLE")
 _MATCH_QUEUE_URL = os.environ.get("MATCH_QUEUE_URL")  # optional until Task 8
@@ -68,8 +70,12 @@ def _register_found(principal, body) -> dict:
     location_zone = (body.get("locationZone") or "").strip()
     photo_key = body.get("photoKey")  # optional; from a prior /items/uploads call
 
-    if not location_zone:
-        return error(400, "locationZone is required.")
+    location = parse_location(body.get("location"))
+    radius = parse_radius(body.get("searchRadiusMetres"), location)
+    if radius is not None:
+        return error(400, "Only lost reports can set a search radius.")
+    if not location_zone and location is None:
+        return error(400, "Choose a location or provide a legacy locationZone.")
     # Photo-first: a description may be omitted if a photo is supplied (the pipeline
     # generates one from the photo in Task 7). Otherwise a description is required.
     if not description and not photo_key:
@@ -85,7 +91,9 @@ def _register_found(principal, body) -> dict:
         owner_id=principal.user_id,  # the staff who registered it
         owner_email=principal.email,
         description=description or None,
-        location_zone=location_zone,
+        location_zone=location_zone or None,
+        location=location,
+        search_radius_metres=radius,
         event_time=body.get("eventTime") or now_iso(),
         photo_key=photo_key,
         vectors=VectorMap(),
@@ -135,6 +143,7 @@ def _update_item(principal, item_id, body) -> dict:
         return error(409, "Only available items can be edited. Use the claim actions for reserved or closed items.")
 
     expected_revision = int(body.get("revision", item.revision))
+    old_location, old_radius = item.location, item.search_radius_metres
     old = (
         item.description, item.location_zone, item.event_time, item.photo_key,
         item.description_source, item.description_photo_key,
@@ -142,11 +151,20 @@ def _update_item(principal, item_id, body) -> dict:
 
     if "description" in body:
         item.description = (body["description"] or "").strip() or None
+    if "location" in body:
+        item.location = parse_location(body["location"])
     if "locationZone" in body:
-        lz = (body["locationZone"] or "").strip()
-        if not lz:
-            return error(400, "locationZone cannot be empty.")
-        item.location_zone = lz
+        zone = body["locationZone"]
+        if zone is not None and not isinstance(zone, str):
+            return error(400, "locationZone must be a string or null.")
+        item.location_zone = (zone or "").strip() or None
+    if not item.location and not item.location_zone:
+        return error(400, "Choose a location or provide a legacy locationZone.")
+    item.search_radius_metres = parse_radius(
+        body.get("searchRadiusMetres", item.search_radius_metres), item.location,
+    )
+    if item.search_radius_metres is not None:
+        return error(400, "Only lost reports can set a search radius.")
     if "eventTime" in body:
         item.event_time = body["eventTime"]
     if "photoKey" in body:
@@ -186,6 +204,7 @@ def _update_item(principal, item_id, body) -> dict:
         item.description, item.location_zone, item.event_time, item.photo_key,
         item.description_source, item.description_photo_key,
     )
+    changed = changed or item.location != old_location or item.search_radius_metres != old_radius
     if not changed:
         view = _public_view(item)
         view["rematching"] = False
@@ -193,6 +212,7 @@ def _update_item(principal, item_id, body) -> dict:
     if description_changed:
         item.vectors = VectorMap()
     relevant_changed = any((description_changed, photo_changed, item.location_zone != old[1], item.event_time != old[2]))
+    relevant_changed = relevant_changed or _point(item.location) != _point(old_location) or item.search_radius_metres != old_radius
     item.revision += 1
     ddb_item = item_to_ddb(item, created_at=stored.get("createdAt"))
     ddb_item["updatedAt"] = now_iso()
@@ -287,6 +307,8 @@ def _public_view(item) -> dict:
         "organisationId": item.organisation_id,
         "description": item.description,
         "locationZone": item.location_zone,
+        "location": location_to_dict(item.location),
+        "searchRadiusMetres": item.search_radius_metres,
         "eventTime": item.event_time,
         "photoKey": item.photo_key,
         "photoUrl": s3urls.presign_get(item.photo_key) if item.photo_key else None,
@@ -317,6 +339,10 @@ def _validate_new_photo(principal, key) -> dict | None:
     if (meta.get("ContentType") or "").lower() not in _ALLOWED_CONTENT_TYPES:
         return error(400, "The uploaded photo has an unsupported type.")
     return None
+
+
+def _point(location):
+    return (location.latitude, location.longitude) if location else None
 
 
 def _is_conflict(exc: Exception) -> bool:
