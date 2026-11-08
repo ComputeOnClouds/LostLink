@@ -18,6 +18,9 @@ frontend/dist/
 frontend/.vite/
 frontend/test-results/
 frontend/playwright-report/
+# Local runtime configuration (CDK generates the deployed config).
+frontend/public/config.json
+frontend/frontend/public/config.json
 .impeccable/review/
 
 # Env / secrets

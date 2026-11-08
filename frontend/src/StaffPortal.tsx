@@ -100,7 +100,7 @@ export function StaffPortal({ api, organisationId }: { api: ApiClient; organisat
   );
 }
 
-function ClaimReview({ api }: { api: ApiClient }) {
+export function ClaimReview({ api }: { api: ApiClient }) {
   const [claims, setClaims] = useState<StaffClaim[]>([]);
   const [loading, setLoading] = useState(true);
   const [openClaim, setOpenClaim] = useState<string | null>(null);

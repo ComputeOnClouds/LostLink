@@ -156,7 +156,8 @@ item mine, and can I collect it?".
 - Found-item badge: `available` / `reserved` / `closed` / `withdrawn`.
 - Claim badge: the 7 states, on both the individual's "My claims" and staff "Ownership
   claims" lists. Labels: `frontend/src/labels.ts`.
-- No live polling — a refresh reflects the latest worker-set status and new matches.
+- The individual portal polls for up to one minute during a pending match search.
+  **Refresh results** fetches the latest report statuses and suggestions on demand.
 
 ---
 

@@ -175,7 +175,10 @@ def test_token_and_search_cache_expire():
     assert len(calls) == 5
 
 
-@pytest.mark.parametrize("failure", [TimeoutError(), URLError("SECRET"), HTTPError("url", 429, "SECRET", {}, None)])
+@pytest.mark.parametrize(
+    "failure", [TimeoutError(), URLError("SECRET"), HTTPError("url", 429, "SECRET", {}, None)],
+    ids=["timeout", "url-error", "http-error"],
+)
 def test_transport_errors_are_sanitized(monkeypatch, failure):
     def fail(*args, **kwargs):
         raise failure

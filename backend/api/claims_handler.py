@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import boto3
 from boto3.dynamodb.conditions import Key
-from boto3.dynamodb.types import TypeSerializer
+from botocore.exceptions import ClientError
 
 from pipeline.impl.ddb_mapping import ddb_to_item, now_iso
 
@@ -42,7 +42,6 @@ _MATCHES_TABLE = os.environ.get("MATCHES_TABLE")
 _CLAIMS_TABLE = os.environ.get("CLAIMS_TABLE")
 
 _ddb = boto3.resource("dynamodb")
-_serializer = TypeSerializer()
 _ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "application/pdf"}
 _MAX_EVIDENCE_BYTES = int(os.environ.get("MAX_EVIDENCE_BYTES", str(10 * 1024 * 1024)))
 _MAX_EVIDENCE_PER_MESSAGE = int(os.environ.get("MAX_EVIDENCE_PER_MESSAGE", "5"))
@@ -61,11 +60,26 @@ def _claims():
     return _ddb.Table(_CLAIMS_TABLE)
 
 
+def _own_claims(principal):
+    table = _claims()
+    query = {
+        "IndexName": "by-owner",
+        "KeyConditionExpression": Key("claimantId").eq(principal.user_id),
+    }
+    while True:
+        page = table.query(**query)
+        yield from page.get("Items", [])
+        cursor = page.get("LastEvaluatedKey")
+        if not cursor:
+            break
+        query["ExclusiveStartKey"] = cursor
+
+
 # ---- individual: match suggestions --------------------------------------------------
 
 
 def _list_matches(principal) -> dict:
-    """My match suggestions: matches whose lost report I own. Found details hidden."""
+    """Unclaimed suggestions for my lost reports. Found details hidden."""
     principal.require_individual()
 
     # Find my lost reports (by-owner GSI), then gather their matches.
@@ -77,14 +91,23 @@ def _list_matches(principal) -> dict:
         r["itemId"] for r in reports
         if r.get("itemType") == "lost" and r.get("status") != "withdrawn"
     }
+    if not my_report_ids:
+        return respond(200, {"matches": []})
 
+    # A submitted pair stays in claim history through all later decisions.
+    claimed_pairs = {
+        (claim.get("queryItemId"), claim.get("candidateItemId"))
+        for claim in _own_claims(principal)
+    }
     suggestions = []
     for rid in my_report_ids:
         rows = _matches().query(
             KeyConditionExpression=Key("queryItemId").eq(rid),
+            ConsistentRead=True,
         ).get("Items", [])
         for m in rows:
-            if m.get("active", True) is False:
+            if (m.get("active", True) is False or m.get("submittedClaimId")
+                    or (rid, m["candidateItemId"]) in claimed_pairs):
                 continue
             found = _items().get_item(Key={"itemId": m["candidateItemId"]}).get("Item")
             if not found or found.get("status") != "available":
@@ -143,10 +166,22 @@ def _create_claim(principal, body) -> dict:
     if not report or report.get("ownerId") != principal.user_id or report.get("itemType") != "lost":
         raise AuthError(403, "You can only claim against your own report.")
     match = _matches().get_item(
-        Key={"queryItemId": query_item_id, "candidateItemId": candidate_item_id}
+        Key={"queryItemId": query_item_id, "candidateItemId": candidate_item_id},
+        ConsistentRead=True,
     ).get("Item")
     if not match:
         raise AuthError(404, "No such match suggestion.")
+    duplicate_message = "You already submitted a claim for this match. View it in My claims."
+    if match.get("submittedClaimId"):
+        return error(409, duplicate_message)
+    # Records created before the transaction guard still suppress repeat submissions.
+    if any(
+        claim.get("queryItemId") == query_item_id and claim.get("candidateItemId") == candidate_item_id
+        for claim in _own_claims(principal)
+    ):
+        return error(409, duplicate_message)
+    if report.get("status") == "withdrawn" or match.get("active", True) is False:
+        return error(409, "This suggestion is no longer available. Refresh results.")
 
     claim_id = f"claim-{uuid.uuid4().hex}"
     now = now_iso()
@@ -165,17 +200,43 @@ def _create_claim(principal, body) -> dict:
         "createdAt": now,
         "updatedAt": now,
     }
-    _claims().put_item(Item=item)
+    try:
+        # Claim creation and the per-pair guard succeed or fail together.
+        _ddb.meta.client.transact_write_items(TransactItems=[
+            {
+                "Update": {
+                    "TableName": _MATCHES_TABLE,
+                    "Key": {
+                        "queryItemId": query_item_id,
+                        "candidateItemId": candidate_item_id,
+                    },
+                    "UpdateExpression": "SET submittedClaimId = :claim",
+                    "ConditionExpression": (
+                        "attribute_exists(queryItemId) AND attribute_not_exists(submittedClaimId) "
+                        "AND (attribute_not_exists(active) OR active = :active)"
+                    ),
+                    "ExpressionAttributeValues": {":claim": claim_id, ":active": True},
+                }
+            },
+            {
+                "Put": {
+                    "TableName": _CLAIMS_TABLE,
+                    "Item": item,
+                    "ConditionExpression": "attribute_not_exists(claimId)",
+                }
+            },
+        ])
+    except ClientError as exc:
+        reasons = exc.response.get("CancellationReasons", [])
+        if any(reason.get("Code") in {"ConditionalCheckFailed", "TransactionConflict"} for reason in reasons):
+            return error(409, "This match changed or was already claimed. Refresh results and check My claims.")
+        raise
     return respond(201, {"claimId": claim_id, "state": item["state"]})
 
 
 def _list_claims(principal) -> dict:
     principal.require_individual()
-    rows = _claims().query(
-        IndexName="by-owner",
-        KeyConditionExpression=Key("claimantId").eq(principal.user_id),
-    ).get("Items", [])
-    return respond(200, {"claims": [_claim_view(c) for c in rows]})
+    return respond(200, {"claims": [_claim_view(c) for c in _own_claims(principal)]})
 
 
 def _get_claim(principal, claim_id) -> dict:
@@ -339,38 +400,35 @@ def _transact_claim_and_item(
     item_status = "reserved" if new_state == cs.STATE_RESERVED else "closed"
     item_condition = "#s = :available" if item_status == "reserved" else "#s IN (:available, :reserved)"
 
-    def av(values):
-        return {key: _serializer.serialize(value) for key, value in values.items()}
-
     _ddb.meta.client.transact_write_items(TransactItems=[
         {
             "Update": {
                 "TableName": _CLAIMS_TABLE,
-                "Key": {"claimId": {"S": claim_id}},
+                "Key": {"claimId": claim_id},
                 "UpdateExpression": "SET #s = :s, messages = :m, updatedAt = :u, revision = :nr",
                 "ConditionExpression": "#s = :es AND (attribute_not_exists(revision) OR revision = :er)",
                 "ExpressionAttributeNames": {"#s": "state"},
-                "ExpressionAttributeValues": av({
+                "ExpressionAttributeValues": {
                     ":s": new_state, ":es": expected_state, ":m": messages,
                     ":u": updated_at, ":er": expected_revision, ":nr": next_revision,
-                }),
+                },
             }
         },
         {
             "Update": {
                 "TableName": _ITEMS_TABLE,
-                "Key": {"itemId": {"S": candidate_item_id}},
+                "Key": {"itemId": candidate_item_id},
                 "UpdateExpression": "SET #s = :status, revision = if_not_exists(revision, :zero) + :one, updatedAt = :u",
                 "ConditionExpression": item_condition,
                 "ExpressionAttributeNames": {"#s": "status"},
-                "ExpressionAttributeValues": av({
+                "ExpressionAttributeValues": {
                     ":status": item_status,
                     ":available": "available",
                     **({":reserved": "reserved"} if item_status == "closed" else {}),
                     ":zero": 0,
                     ":one": 1,
                     ":u": updated_at,
-                }),
+                },
             }
         },
     ])
@@ -491,7 +549,7 @@ def _staff_claim_view(claim, detailed=False) -> dict:
 def _load_own_claim(principal, claim_id):
     if not claim_id:
         raise AuthError(400, "Missing claim id.")
-    claim = _claims().get_item(Key={"claimId": claim_id}).get("Item")
+    claim = _claims().get_item(Key={"claimId": claim_id}, ConsistentRead=True).get("Item")
     if not claim:
         raise AuthError(404, "Claim not found.")
     if claim.get("claimantId") != principal.user_id:
