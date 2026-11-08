@@ -5,8 +5,8 @@ the single place where a stage implementation is chosen, so swapping an implemen
 (e.g. RETRIEVER=ann once an AnnRetriever exists) is a config change, not a code change.
 
 Environment variables (all optional; defaults chosen for the prototype):
-    DESCRIPTION_SOURCE = claude      (default)
-    EMBEDDER           = titan       (default)
+    DESCRIPTION_SOURCE = claude      (default) | openai
+    EMBEDDER           = titan       (default) | openai
     RETRIEVER          = bruteforce  (default) | ann
     SCORER             = blended     (default)
     PROFILE_SELECTOR   = default     (default)
@@ -37,6 +37,7 @@ from .impl import (
     SesNotifier,
     DynamoItemRepository,
 )
+from .impl.openai_compat import OpenAICompatDescriptionSource, OpenAICompatEmbedder
 
 
 def make_repository() -> ItemRepository:
@@ -50,6 +51,8 @@ def make_description_source() -> DescriptionSource:
     choice = os.environ.get("DESCRIPTION_SOURCE", "claude").lower()
     if choice == "claude":
         return ClaudeDescriptionSource()
+    if choice == "openai":
+        return OpenAICompatDescriptionSource()
     raise ValueError(f"Unknown DESCRIPTION_SOURCE implementation: {choice!r}")
 
 
@@ -57,6 +60,8 @@ def make_embedder() -> Embedder:
     choice = os.environ.get("EMBEDDER", "titan").lower()
     if choice == "titan":
         return TitanEmbedder()
+    if choice == "openai":
+        return OpenAICompatEmbedder()
     raise ValueError(f"Unknown EMBEDDER implementation: {choice!r}")
 
 

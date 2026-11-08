@@ -1,0 +1,68 @@
+# LostLink local stack, no AWS account needed (docs/LOCAL.md):
+#   docker compose up --build    then open http://localhost:5173
+name: lostlink
+
+services:
+  moto:  # AWS emulator: DynamoDB, S3, SQS, SES, Secrets Manager, Cognito
+    image: motoserver/moto:5.2.4
+    ports: ["5050:5000"]  # 5000 is taken by AirPlay on macOS
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:5000/moto-api/"]
+      interval: 2s
+      retries: 30
+
+  backend:  # local/server.py: real Lambda handlers + match worker, restarted on code changes
+    build:
+      context: ./backend
+      dockerfile_inline: |
+        FROM python:3.12-slim
+        ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app/backend
+        COPY requirements.txt .
+        RUN pip install --no-cache-dir -r requirements.txt "PyJWT[crypto]==2.10.1" "watchfiles==1.1.0"
+    command: ["watchfiles", "--filter", "python", "--grace-period", "3", "python /app/local/server.py", "/app/backend", "/app/local"]
+    volumes: ["./backend:/app/backend:ro", "./local:/app/local:ro"]
+    ports: ["8080:8080"]
+    depends_on:
+      moto: {condition: service_healthy}
+    environment:
+      AWS_REGION: ap-southeast-2
+      AWS_DEFAULT_REGION: ap-southeast-2
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_ENDPOINT_URL: http://moto:5000
+      ITEMS_TABLE: LostLink-Items
+      CLAIMS_TABLE: LostLink-Claims
+      MATCHES_TABLE: LostLink-Matches
+      PHOTOS_BUCKET: lostlink-photos-local
+      MATCH_QUEUE_URL: http://moto:5000/123456789012/LostLink-match-jobs
+      SENDER_EMAIL: no-reply@lostlink.local
+      CLOUDFRONT_URL: http://localhost:5173
+      ONEMAP_SECRET_ARN: LostLink/onemap
+      ONEMAP_EMAIL: ${ONEMAP_EMAIL:-}
+      ONEMAP_PASSWORD: ${ONEMAP_PASSWORD:-}
+      MATCH_THRESHOLD: ${MATCH_THRESHOLD:-0.7}
+      # Bedrock is replaced by an OpenAI-compatible API (NUS SoClaaS by default).
+      EMBEDDER: openai
+      DESCRIPTION_SOURCE: openai
+      LLM_BASE_URL: ${LLM_BASE_URL:-${SOCLAAS_BASE_URL:-}}
+      LLM_API_KEY: ${LLM_API_KEY:-${SOCLAAS_API_KEY:-}}
+      LLM_EMBED_MODEL: ${LLM_EMBED_MODEL:-bge-m3}
+      LLM_VISION_MODEL: ${LLM_VISION_MODEL:-qwen3-vl:32b}
+
+  frontend:  # Vite dev server; frontend/ is mounted read-only and not modified
+    build:
+      context: ./frontend
+      dockerfile_inline: |
+        FROM node:22-alpine
+        WORKDIR /app
+        COPY package.json package-lock.json ./
+        RUN npm ci
+    command: ["npx", "vite", "--config", "vite.local.config.ts", "--host", "0.0.0.0"]
+    ports: ["5173:5173"]
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/index.html:/app/index.html:ro
+      - ./frontend/vite.config.ts:/app/vite.config.ts:ro
+      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+      - ./local/vite.local.config.ts:/app/vite.local.config.ts:ro
+    depends_on: [backend]

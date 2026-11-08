@@ -27,9 +27,11 @@ def _s3():
         _client = boto3.client(
             "s3",
             region_name=_REGION,
-            endpoint_url=f"https://s3.{_REGION}.amazonaws.com",
+            # AWS_ENDPOINT_URL is set only by the local Docker stack (docs/LOCAL.md).
+            endpoint_url=os.environ.get("AWS_ENDPOINT_URL") or f"https://s3.{_REGION}.amazonaws.com",
             config=BotoConfig(
-                signature_version="s3v4", s3={"addressing_style": "virtual"}
+                signature_version="s3v4",
+                s3={"addressing_style": "path" if os.environ.get("AWS_ENDPOINT_URL") else "virtual"},
             ),
         )
     return _client

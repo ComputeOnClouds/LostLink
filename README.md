@@ -30,12 +30,14 @@ ComputeOnClouds/
 │   └── pipeline/     Swappable matching-pipeline stages (interfaces + impl) + worker
 ├── frontend/         React (Vite) SPA (Individual + Staff portals) + styles
 ├── eval/             Evaluation harness (metrics, ground-truth gen, load test, cost)
+├── local/            Docker stack: local API + SQS worker, resource bootstrap, Vite wrapper
 ├── scripts/          Deploy + live-verification + seed scripts
 ├── docs/             All project docs:
 │   ├── FLOW.md           End-to-end flow overview + the two lifecycles; links per-flow docs
 │   ├── flows/           Per-flow deep-dives: authentication, organisation-access, matching,
 │   │                    notification, decision-and-status (code, files, how to change each)
 │   ├── RUNBOOK.md        Step-by-step deploy-to-any-AWS-account procedure + troubleshooting
+│   ├── LOCAL.md          Run the whole app locally with Docker Compose (no AWS account)
 │   ├── RATIONALE.md      Decision record (ADRs) — what / why / alternatives
 │   └── ARCHITECTURE.md   Component interactions (architecture + class level, diagrams)
 └── README.md         This file
@@ -61,6 +63,23 @@ Fully serverless on AWS (see `docs/ARCHITECTURE.md` for full diagrams):
 The core differentiator is **cross-organisation matching with privacy**: a lost report is
 matched against found items across *all* participating organisations, but item details
 stay hidden from the claimant until staff verify ownership.
+
+---
+
+## Run locally (Docker, no AWS account)
+
+```bash
+ln -s /path/to/soclaas.env .env   # or: cp .env.example .env and set LLM_BASE_URL / LLM_API_KEY
+docker compose up --build         # then open http://localhost:5173 (demo accounts below)
+```
+
+The same Lambda handlers, matching worker and frontend you deploy run against local stand-ins:
+- **AWS services:** moto emulates Cognito, DynamoDB, S3, SQS and SES.
+- **API Gateway and the SQS trigger:** a small local server in `local/`.
+- **Bedrock:** replaced by an OpenAI-compatible LLM API, NUS SoClaaS by default.
+
+See [`docs/LOCAL.md`](./docs/LOCAL.md) for setup, AI backend options, and how local
+differs from AWS.
 
 ---
 
@@ -167,7 +186,8 @@ or you can sign in with a demo account below. Staff accounts are admin-provision
    sees the item details.
 
 Local dev: `cd frontend && npm run dev` (fetches `/config.json`; point it at the deployed
-API by serving a local config).
+API by serving a local config). To run everything locally without AWS, see
+[Run locally](#run-locally-docker-no-aws-account).
 
 ## Run tests
 
@@ -230,8 +250,8 @@ from environment variables.
 
 | Stage (interface) | Implementation | Swap by |
 |-------------------|----------------|---------|
-| `DescriptionSource` | `ClaudeDescriptionSource` (photo→text, or typed) | env `DESCRIPTION_SOURCE` |
-| `Embedder` | `TitanEmbedder` (text vector; image slot reserved) | env `EMBEDDER` |
+| `DescriptionSource` | `ClaudeDescriptionSource` (photo→text, or typed); `OpenAICompatDescriptionSource` (any OpenAI-compatible API, used locally) | env `DESCRIPTION_SOURCE` (`claude` \| `openai`) |
+| `Embedder` | `TitanEmbedder` (text vector; image slot reserved); `OpenAICompatEmbedder` (used locally) | env `EMBEDDER` (`titan` \| `openai`) |
 | `CandidateRetriever` | `BruteForceRetriever` (`AnnRetriever` stub for scale) | env `RETRIEVER` |
 | `Scorer` | `BlendedScorer` (weighted text+location+time; pure) | env `SCORER` |
 | `ProfileSelector` | `DefaultProfileSelector` (weights/threshold from env) | env `PROFILE_SELECTOR` |
