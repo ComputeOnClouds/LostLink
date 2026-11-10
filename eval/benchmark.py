@@ -342,6 +342,21 @@ SEMESTER_DAYS = 84
 ON_CAMPUS_LOST_SHARE = 0.85
 HARD_NEGATIVE_COLOCATED_SHARE = 0.5
 
+# full: 100 lost / 200 found. small: 20 lost / 40 found (a seeded subset of the same items).
+SIZES = {
+    "full": {"pairs": 60, "near_miss": 20, "unrelated": 20, "distractors": 80},
+    "small": {"pairs": 12, "near_miss": 4, "unrelated": 4, "distractors": 16},
+}
+# realistic: look-alike hard negatives + the band mix above.
+# best_case: the 4x4 sample's conditions — no look-alikes (replaced by distractors), every
+# true pair found at the stated place within hours. An upper bound, not an estimate.
+CONDITIONS = {
+    "realistic": {"hard_negatives": True, "location_bands": LOCATION_BANDS,
+                  "delay_bands": DELAY_BANDS},
+    "best_case": {"hard_negatives": False, "location_bands": [("same", 1.0)],
+                  "delay_bands": [("hours", 1.0, 0.5, 12.0)]},
+}
+
 
 def _haversine_m(a: tuple, b: tuple) -> float:
     lat_a, lat_b = math.radians(a[1]), math.radians(b[1])
@@ -393,17 +408,40 @@ def _iso(t: datetime) -> str:
     return t.replace(microsecond=0).isoformat()
 
 
-def build_benchmark(seed: int = 5224) -> dict:
+def _select(sel: random.Random, items: list, n: int, prefer=None) -> list[tuple[int, object]]:
+    """Seeded subset of (1-based index, item), keeping list order; all items when n covers
+    the list. ``prefer`` items are taken first (e.g. near-misses of selected categories)."""
+    indexed = list(enumerate(items, 1))
+    if n >= len(indexed):
+        return indexed
+    first = [x for x in indexed if prefer and prefer(x[1])]
+    rest = [x for x in indexed if x not in first]
+    chosen = sel.sample(first, min(n, len(first)))
+    chosen += sel.sample(rest, n - len(chosen))
+    return sorted(chosen, key=lambda x: x[0])
+
+
+def build_benchmark(seed: int = 5224, size: str = "full", conditions: str = "realistic") -> dict:
+    n, cond = SIZES[size], CONDITIONS[conditions]
     rng = random.Random(seed)
+    sel = random.Random(f"{seed}-select")  # separate stream: subsetting never shifts `rng`
     lost: list[dict] = []
     found: list[dict] = []
 
-    for i, (cat, lost_desc, found_desc, neg_desc) in enumerate(GROUPS, 1):
+    groups = _select(sel, GROUPS, n["pairs"])
+    categories = {g[0] for _, g in groups}
+    near_miss = _select(sel, NEAR_MISS_LOST, n["near_miss"], prefer=lambda x: x[0] in categories)
+    unrelated = _select(sel, UNRELATED_LOST, n["unrelated"])
+    # Without hard negatives, fill their slots with distractors to keep the found count.
+    n_distractors = n["distractors"] + (0 if cond["hard_negatives"] else n["pairs"])
+    distractors = _select(sel, DISTRACTOR_FOUND, n_distractors)
+
+    for i, (cat, lost_desc, found_desc, neg_desc) in groups:
         lp = _lost_place(rng)
-        band = _pick(rng, LOCATION_BANDS)[0]
+        band = _pick(rng, cond["location_bands"])[0]
         fp = _found_place(rng, lp, band)
         t_lost = _random_time(rng)
-        delay_band, _, lo, hi = _pick(rng, DELAY_BANDS)
+        delay_band, _, lo, hi = _pick(rng, cond["delay_bands"])
         t_found = t_lost + timedelta(hours=rng.uniform(lo, hi))
 
         fid = f"f-p{i:02d}"
@@ -415,6 +453,8 @@ def build_benchmark(seed: int = 5224) -> dict:
                       "description": found_desc, "location": _location(rng, fp),
                       "eventTime": _iso(t_found)})
 
+        if not cond["hard_negatives"]:
+            continue
         if rng.random() < HARD_NEGATIVE_COLOCATED_SHARE:
             np_, t_neg, colocated = lp, t_lost + timedelta(hours=rng.uniform(-72, 72)), True
         else:
@@ -423,17 +463,17 @@ def build_benchmark(seed: int = 5224) -> dict:
                       "description": neg_desc, "location": _location(rng, np_),
                       "eventTime": _iso(t_neg), "colocated": colocated})
 
-    for i, (cat, desc) in enumerate(NEAR_MISS_LOST, 1):
+    for i, (cat, desc) in near_miss:
         lost.append({"id": f"l-n{i:02d}", "kind": "near_miss", "category": cat,
                      "description": desc, "location": _location(rng, _lost_place(rng)),
                      "eventTime": _iso(_random_time(rng)), "truth": None})
 
-    for i, desc in enumerate(UNRELATED_LOST, 1):
+    for i, desc in unrelated:
         lost.append({"id": f"l-u{i:02d}", "kind": "unrelated", "category": None,
                      "description": desc, "location": _location(rng, _lost_place(rng)),
                      "eventTime": _iso(_random_time(rng)), "truth": None})
 
-    for i, desc in enumerate(DISTRACTOR_FOUND, 1):
+    for i, desc in distractors:
         found.append({"id": f"f-d{i:02d}", "kind": "distractor", "category": None,
                       "description": desc, "location": _location(rng, rng.choice(PLACES)),
                       "eventTime": _iso(_random_time(rng))})
@@ -443,9 +483,10 @@ def build_benchmark(seed: int = 5224) -> dict:
     rng.shuffle(found)
     return {
         "meta": {
-            "source": "benchmark", "seed": seed,
-            "location_bands": LOCATION_BANDS, "nearby_max_m": NEARBY_MAX_M,
-            "delay_bands": DELAY_BANDS, "semester_days": SEMESTER_DAYS,
+            "source": "benchmark", "seed": seed, "size": size, "conditions": conditions,
+            "hard_negatives": cond["hard_negatives"],
+            "location_bands": cond["location_bands"], "nearby_max_m": NEARBY_MAX_M,
+            "delay_bands": cond["delay_bands"], "semester_days": SEMESTER_DAYS,
             "hard_negative_colocated_share": HARD_NEGATIVE_COLOCATED_SHARE,
         },
         "lost": lost,

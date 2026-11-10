@@ -169,8 +169,10 @@ def main():
         # Hand-authored ~100 lost / ~200 found set with hard negatives (eval/benchmark.py).
         from benchmark import build_benchmark
 
-        print("Building benchmark dataset (hard negatives, coordinates, varied timing)...")
-        ds = build_benchmark(int(os.environ.get("EVAL_SEED", "5224")))
+        size = os.environ.get("EVAL_SIZE", "full")  # full (100x200) | small (20x40)
+        conditions = os.environ.get("EVAL_CONDITIONS", "realistic")  # realistic | best_case
+        print(f"Building benchmark dataset (size={size}, conditions={conditions})...")
+        ds = build_benchmark(int(os.environ.get("EVAL_SEED", "5224")), size, conditions)
     else:
         # Defaults are small to limit cost; override via env for the full ~100/200 set.
         n_pairs = int(os.environ.get("EVAL_PAIRS", "25"))

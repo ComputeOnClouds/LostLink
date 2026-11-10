@@ -50,3 +50,20 @@ def test_deterministic_for_a_seed():
 def test_pairs_are_not_all_colocated():
     bands = Counter(r["locationBand"] for r in build_benchmark()["lost"] if r["kind"] == "pair")
     assert set(bands) == {"same", "nearby", "far"}
+
+
+def test_small_is_20_lost_40_found_with_valid_truths():
+    for conditions in ("realistic", "best_case"):
+        ds = build_benchmark(size="small", conditions=conditions)
+        assert (len(ds["lost"]), len(ds["found"])) == (20, 40)
+        found_ids = {r["id"] for r in ds["found"]}
+        truths = [r["truth"] for r in ds["lost"] if r["truth"]]
+        assert len(truths) == 12 and set(truths) <= found_ids
+
+
+def test_best_case_has_no_lookalikes_and_all_pairs_colocated_within_hours():
+    ds = build_benchmark(size="small", conditions="best_case")
+    assert not any(r["kind"] == "hard_negative" for r in ds["found"])
+    pairs = [r for r in ds["lost"] if r["kind"] == "pair"]
+    assert {r["locationBand"] for r in pairs} == {"same"}
+    assert {r["delayBand"] for r in pairs} == {"hours"}
