@@ -40,7 +40,7 @@ services:
       ONEMAP_SECRET_ARN: LostLink/onemap
       ONEMAP_EMAIL: ${ONEMAP_EMAIL:-}
       ONEMAP_PASSWORD: ${ONEMAP_PASSWORD:-}
-      MATCH_THRESHOLD: ${MATCH_THRESHOLD:-0.7}
+      MATCH_THRESHOLD: ${MATCH_THRESHOLD:-0.85}
       # Bedrock is replaced by an OpenAI-compatible API (NUS SoClaaS by default).
       EMBEDDER: openai
       DESCRIPTION_SOURCE: openai

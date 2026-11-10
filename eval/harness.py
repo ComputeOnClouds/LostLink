@@ -87,7 +87,7 @@ class VariantReport:
     missed_notification_rate: float
 
 
-def evaluate(dataset: dict, threshold: float = 0.7) -> list[VariantReport]:
+def evaluate(dataset: dict, threshold: float = 0.85) -> list[VariantReport]:
     reports = []
     for name, weights in VARIANTS.items():
         queries = rank_variant(dataset, weights)

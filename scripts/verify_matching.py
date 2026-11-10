@@ -139,7 +139,7 @@ def main():
     check(m is not None, "match row lost->found exists")
     if m:
         check(str(m.get("organisationId")) == "org-nus", "match organisationId = org-nus")
-        check(float(m.get("score", 0)) >= 0.7, f"score >= threshold (score={m.get('score')})")
+        check(float(m.get("score", 0)) >= 0.85, f"score >= threshold (score={m.get('score')})")
         check(m.get("notified") is False, "match starts notified=false (Task 10 dedup ready)")
 
     print("6. unrelated report does NOT match the bottle")

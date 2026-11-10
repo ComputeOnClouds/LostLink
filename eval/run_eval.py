@@ -25,7 +25,7 @@ def main():
         sys.exit(1)
 
     dataset = load_dataset(path)
-    threshold = float(os.environ.get("MATCH_THRESHOLD", "0.7"))
+    threshold = float(os.environ.get("MATCH_THRESHOLD", "0.85"))
     reports = evaluate(dataset, threshold=threshold)
 
     out_dir = os.path.join(os.path.dirname(__file__), "output")

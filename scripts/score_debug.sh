@@ -14,6 +14,6 @@ export WEIGHT_TEXT="${WEIGHT_TEXT:-0.6}"
 export WEIGHT_IMAGE="${WEIGHT_IMAGE:-0.0}"
 export WEIGHT_LOCATION="${WEIGHT_LOCATION:-0.25}"
 export WEIGHT_TIME="${WEIGHT_TIME:-0.15}"
-export MATCH_THRESHOLD="${MATCH_THRESHOLD:-0.7}"
+export MATCH_THRESHOLD="${MATCH_THRESHOLD:-0.85}"
 . backend/.venv/bin/activate
 python3 scripts/score_debug.py

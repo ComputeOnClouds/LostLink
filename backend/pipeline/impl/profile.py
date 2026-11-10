@@ -31,5 +31,5 @@ class DefaultProfileSelector(ProfileSelector):
             "location": _f("WEIGHT_LOCATION", 0.25),
             "time": _f("WEIGHT_TIME", 0.15),
         }
-        threshold = _f("MATCH_THRESHOLD", 0.7)
+        threshold = _f("MATCH_THRESHOLD", 0.85)
         return Profile(name="text_location_time", weights=weights, threshold=threshold)

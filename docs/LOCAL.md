@@ -43,8 +43,8 @@ http://localhost:5050/moto-api/data.json.
   or reset code is accepted too.
 - **Match scores differ.** Locally, text similarity comes from `bge-m3` instead of
   Titan. With the same place and time, unrelated items scored 0.80–0.85 in testing,
-  above the default threshold of 0.7, so they match. Set `MATCH_THRESHOLD` in `.env`
-  to be stricter.
+  just below the default threshold of 0.85, so a near miss can still cross it. Set
+  `MATCH_THRESHOLD` in `.env` to tune this.
 - **One process.** All handlers and the worker run one at a time in one process, with
   no 30-second timeout. S3 upload size limits aren't enforced.
 - **Place search** needs `ONEMAP_EMAIL` / `ONEMAP_PASSWORD` in `.env`. Without them it

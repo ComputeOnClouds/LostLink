@@ -165,7 +165,7 @@ def test_profile_selector_defaults(monkeypatch):
         monkeypatch.delenv(v, raising=False)
     p = DefaultProfileSelector().select(item("a"), item("b", ItemType.FOUND))
     assert p.weights == {"text": 0.6, "image": 0.0, "location": 0.25, "time": 0.15}
-    assert p.threshold == 0.7
+    assert p.threshold == 0.85
 
 
 def test_threshold_boundary_semantics():

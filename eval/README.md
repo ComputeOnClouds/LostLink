@@ -44,7 +44,7 @@ LLM_BASE_URL=... LLM_API_KEY=... LLM_EMBED_MODEL=bge-m3 \
 # Smaller 20 x 40 sets: add EVAL_SIZE=small, and EVAL_CONDITIONS=best_case for the upper bound.
 
 python3 run_eval.py data/generated/benchmark_bge-m3.json
-MATCH_THRESHOLD=0.85 python3 run_eval.py data/generated/benchmark_bge-m3.json   # other thresholds
+MATCH_THRESHOLD=0.7 python3 run_eval.py data/generated/benchmark_bge-m3.json    # other thresholds
 ```
 
 Scores are not comparable across embedding models: re-tune the threshold per model.

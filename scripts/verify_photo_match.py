@@ -136,7 +136,7 @@ def main():
     check(bool(desc), f"Claude generated a description for the found item: {str(desc)[:60]!r}")
     check(bool(found.get("vecText")), "found item got a text embedding from the generated description")
     if m:
-        check(float(m.get("score", 0)) >= 0.7, f"match score >= threshold (score={m.get('score')})")
+        check(float(m.get("score", 0)) >= 0.85, f"match score >= threshold (score={m.get('score')})")
 
     print("5. cleanup")
     for iid in created:
