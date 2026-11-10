@@ -116,14 +116,17 @@ denominator; score stays in 0–1).
 - **temporalSim** (`_temporal`) — `0.5 ** (hours / 72)`; `1.0` at the same instant.
 
 Defaults (`infra/lib/config.ts`): text `0.6`, image `0.0`, location `0.25`, time `0.15`;
-**threshold `0.7`**.
+**threshold `0.85`**. Raised from 0.7 after the 100 lost / 200 found benchmark
+([eval/README.md](../../eval/README.md)): with real embeddings, unrelated items average
+about 0.72 on text alone, so 0.7 alerted on almost every report.
 
 Worked example — the dummy "wallet / central library" vs the found wallet:
 ```
 text 0.733, location 0.100 (zones differ), time 1.000
-0.6·0.733 + 0.25·0.100 + 0.15·1.000 = 0.615  -> below 0.7  (no_match)
+0.6·0.733 + 0.25·0.100 + 0.15·1.000 = 0.615  -> below 0.85  (no_match)
 ```
-If zones matched: `0.6·0.733 + 0.25·1.0 + 0.15·1.0 = 0.84` → match.
+If zones matched: `0.6·0.733 + 0.25·1.0 + 0.15·1.0 = 0.84` → still below 0.85, so no
+match: a text similarity of 0.733 is weak even when place and time agree.
 
 Inspect live pairs:
 ```bash

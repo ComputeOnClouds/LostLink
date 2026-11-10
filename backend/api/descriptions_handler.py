@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import boto3
 
 from pipeline.impl.ddb_mapping import ddb_to_item, now_iso
-from pipeline.impl.description import ClaudeDescriptionSource
+from pipeline.factory import make_description_source
 from pipeline.models import Item, ItemType
 
 from .auth import principal_from_event, AuthError
@@ -95,7 +95,7 @@ def _generate(principal, body) -> dict:
         raise
 
     try:
-        draft = ClaudeDescriptionSource().describe(
+        draft = make_description_source().describe(
             Item(
                 item_id=item_id or "preview",
                 item_type=ItemType.LOST,

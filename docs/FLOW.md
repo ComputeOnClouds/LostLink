@@ -73,7 +73,7 @@ Submitting a report writes the item and enqueues an async job; a worker Lambda e
 score = 0.6·textSim + 0.25·spatialSim + 0.15·temporalSim   (image reserved, 0 today)
 ```
 
-Pairs scoring **≥ 0.70** are persisted as matches and surfaced. The threshold is the
+Pairs scoring **≥ 0.85** are persisted as matches and surfaced. The threshold is the
 visibility gate — a user only ever sees matches that already cleared it, each with its
 confidence score. Full detail incl. the scoring math and tuning:
 [`flows/matching.md`](flows/matching.md).

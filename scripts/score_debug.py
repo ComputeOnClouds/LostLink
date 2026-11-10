@@ -17,7 +17,7 @@ from pipeline.models import ItemType  # noqa: E402
 
 REGION = os.environ.get("AWS_REGION", "ap-southeast-2")
 ITEMS = os.environ["ITEMS_TABLE"]
-THRESH = float(os.environ.get("MATCH_THRESHOLD", "0.7"))
+THRESH = float(os.environ.get("MATCH_THRESHOLD", "0.85"))
 WEIGHTS = {
     "text": float(os.environ.get("WEIGHT_TEXT", "0.6")),
     "image": float(os.environ.get("WEIGHT_IMAGE", "0.0")),

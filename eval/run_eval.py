@@ -25,7 +25,7 @@ def main():
         sys.exit(1)
 
     dataset = load_dataset(path)
-    threshold = float(os.environ.get("MATCH_THRESHOLD", "0.7"))
+    threshold = float(os.environ.get("MATCH_THRESHOLD", "0.85"))
     reports = evaluate(dataset, threshold=threshold)
 
     out_dir = os.path.join(os.path.dirname(__file__), "output")
@@ -34,8 +34,10 @@ def main():
     # Console table.
     cols = ["variant", "hit_at_1", "recall_at_5", "mrr",
             "alert_precision", "false_alert_rate", "missed_notification_rate"]
+    meta = dataset.get("meta", {})
     print(f"\nDataset: {len(dataset['lost'])} lost, {len(dataset['found'])} found; "
-          f"threshold={threshold}\n")
+          f"threshold={threshold}; source={meta.get('source', '?')}, "
+          f"embeddings={meta.get('embed_model', '?')}\n")
     print("  ".join(f"{c:>22}" for c in cols))
     for r in reports:
         print("  ".join(f"{str(getattr(r, c)):>22}" for c in cols))

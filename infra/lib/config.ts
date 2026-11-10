@@ -56,7 +56,7 @@ export const config: LostLinkConfig = {
     weightImage: '0.0', // reserved; enable Option 2 by raising this (RATIONALE ADR-003)
     weightLocation: '0.25',
     weightTime: '0.15',
-    threshold: '0.7',
+    threshold: '0.85',
     retriever: 'bruteforce',
     locationHalfDistanceMetres: process.env.LOCATION_HALF_DISTANCE_METRES ?? '500',
   },
