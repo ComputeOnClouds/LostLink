@@ -10,7 +10,7 @@ ownership is verified by staff.
 
 Built for NUS CS5224 (Cloud Computing) group project.
 
-> **Live app:** https://dyhlyloz80360.cloudfront.net (deployed in `ap-southeast-2`)
+> **Live app:** https://d14j9ujywx75yh.cloudfront.net (deployed in `ap-southeast-2`)
 > **Public code repository:** _<add your Git URL here before submission>_
 > **Deploying into your own AWS account?** Follow [`RUNBOOK.md`](./docs/RUNBOOK.md) — it has the
 > ordered procedure plus the account-specific steps (region, Bedrock access, SES, Lambda
