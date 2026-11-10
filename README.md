@@ -215,8 +215,8 @@ bash scripts/verify_email_live.sh        # REAL email send (needs a verified sen
 ```bash
 bash scripts/verify_eval.sh                         # eval unit + sanity tests + sample sweep
 
-# Generate a real Titan-embedded dataset (Claude generation is optional):
-cd eval && GENERATE_SOURCE=seed python3 generate.py # uses hand-authored seed pairs
+# Main benchmark: 100 lost / 200 found with hard negatives (eval/README.md):
+cd eval && GENERATE_SOURCE=benchmark EMBEDDER=titan python3 generate.py  # or EMBEDDER=openai
 python3 run_eval.py data/generated/dataset.json     # Hit@1 / Recall@5 / MRR per variant
 
 # Performance + cost (Task 14):

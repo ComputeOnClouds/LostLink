@@ -1,4 +1,7 @@
-"""Ground-truth generation + embedding for the evaluation harness (needs Bedrock).
+"""Ground-truth generation + embedding for the evaluation harness.
+
+Needs Bedrock, except GENERATE_SOURCE=benchmark (hand-authored, eval/benchmark.py) with
+EMBEDDER=openai (an OpenAI-compatible endpoint such as the local stack's SoClaaS).
 
 generate_dataset(): uses Claude (via the pipeline's model config) to synthesise lost/found
 item descriptions with known pairings + distractors. Kept small to limit cost.
@@ -16,8 +19,6 @@ import uuid
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
-import boto3
-
 _REGION = os.environ.get("BEDROCK_REGION", os.environ.get("AWS_REGION", "ap-southeast-2"))
 _CLAUDE = os.environ.get("DESCRIBE_MODEL_ID", "au.anthropic.claude-haiku-4-5-20251001-v1:0")
 _TITAN = os.environ.get("EMBED_MODEL_ID", "amazon.titan-embed-text-v2:0")
@@ -26,6 +27,8 @@ ZONES = ["zone-library", "zone-canteen", "zone-gym", "zone-bus-stop", "zone-lect
 
 
 def _bedrock():
+    import boto3  # lazy: the benchmark + EMBEDDER=openai path runs without AWS
+
     return boto3.client("bedrock-runtime", region_name=_REGION)
 
 
@@ -121,33 +124,63 @@ def _extract_json_array(text: str) -> str:
     return text[start:end + 1]
 
 
-def embed_dataset(dataset: dict) -> dict:
-    """Fill vecText on every record via Titan. Mutates + returns the dataset."""
-    brt = _bedrock()
+def embed_dataset(dataset: dict, embedder: str | None = None) -> dict:
+    """Fill vecText on every record. Mutates + returns the dataset.
 
-    def embed(text: str) -> list[float]:
-        resp = brt.invoke_model(modelId=_TITAN, body=json.dumps({"inputText": text}))
-        return json.loads(resp["body"].read())["embedding"]
+    EMBEDDER=titan (default): Bedrock Titan, as in production.
+    EMBEDDER=openai: an OpenAI-compatible /embeddings API, as in the local Docker stack
+    (LLM_BASE_URL, LLM_API_KEY, LLM_EMBED_MODEL; docs/LOCAL.md). Scores are not
+    comparable across embedders, so the choice is recorded in dataset["meta"].
+    """
+    embedder = (embedder or os.environ.get("EMBEDDER", "titan")).lower()
+    todo = [r for r in dataset["lost"] + dataset["found"]
+            if not r.get("vecText") and r.get("description")]
 
-    for rec in dataset["lost"] + dataset["found"]:
-        if not rec.get("vecText") and rec.get("description"):
-            rec["vecText"] = embed(rec["description"])
+    if embedder == "openai":
+        from pipeline.impl.openai_compat import _post
+
+        model = os.environ["LLM_EMBED_MODEL"]
+        for i in range(0, len(todo), 32):
+            batch = todo[i:i + 32]
+            data = _post("/embeddings", {"model": model,
+                                         "input": [r["description"] for r in batch]})["data"]
+            for rec, row in zip(batch, sorted(data, key=lambda d: d["index"])):
+                rec["vecText"] = row["embedding"]
+    elif embedder == "titan":
+        model = _TITAN
+        brt = _bedrock()
+        for rec in todo:
+            resp = brt.invoke_model(modelId=_TITAN,
+                                    body=json.dumps({"inputText": rec["description"]}))
+            rec["vecText"] = json.loads(resp["body"].read())["embedding"]
+    else:
+        raise ValueError(f"Unknown EMBEDDER={embedder!r} (expected titan or openai)")
+
+    dataset.setdefault("meta", {}).update({"embedder": embedder, "embed_model": model})
     return dataset
 
 
 def main():
-    out_dir = os.path.join(os.path.dirname(__file__), "data", "generated")
-    os.makedirs(out_dir, exist_ok=True)
-    out_path = os.path.join(out_dir, "dataset.json")
+    out_path = os.environ.get("EVAL_OUT") or os.path.join(
+        os.path.dirname(__file__), "data", "generated", "dataset.json")
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
 
-    # Defaults are small to limit cost; override via env for the full ~100/200 set.
-    n_pairs = int(os.environ.get("EVAL_PAIRS", "25"))
-    n_df = int(os.environ.get("EVAL_DISTRACTOR_FOUND", "25"))
-    n_dl = int(os.environ.get("EVAL_DISTRACTOR_LOST", "10"))
+    if os.environ.get("GENERATE_SOURCE", "").lower() == "benchmark":
+        # Hand-authored ~100 lost / ~200 found set with hard negatives (eval/benchmark.py).
+        from benchmark import build_benchmark
 
-    print(f"Generating dataset ({n_pairs} pairs, {n_df} distractor-found, {n_dl} distractor-lost)...")
-    ds = generate_dataset(n_pairs, n_df, n_dl)
-    print(f"  lost={len(ds['lost'])} found={len(ds['found'])}; embedding via Titan...")
+        print("Building benchmark dataset (hard negatives, coordinates, varied timing)...")
+        ds = build_benchmark(int(os.environ.get("EVAL_SEED", "5224")))
+    else:
+        # Defaults are small to limit cost; override via env for the full ~100/200 set.
+        n_pairs = int(os.environ.get("EVAL_PAIRS", "25"))
+        n_df = int(os.environ.get("EVAL_DISTRACTOR_FOUND", "25"))
+        n_dl = int(os.environ.get("EVAL_DISTRACTOR_LOST", "10"))
+
+        print(f"Generating dataset ({n_pairs} pairs, {n_df} distractor-found, {n_dl} distractor-lost)...")
+        ds = generate_dataset(n_pairs, n_df, n_dl)
+    print(f"  lost={len(ds['lost'])} found={len(ds['found'])}; "
+          f"embedding via {os.environ.get('EMBEDDER', 'titan')}...")
     ds = embed_dataset(ds)
     with open(out_path, "w") as f:
         json.dump(ds, f)
