@@ -185,7 +185,7 @@ export class ApiClient {
 
   listMatches(): Promise<{ matches: MatchSuggestion[] }> { return this.request('GET', '/matches'); }
   submitClaim(input: { queryItemId: string; candidateItemId: string; evidenceText: string; evidenceKeys?: string[] }) {
-    return this.request<{ claimId: string; state: string }>('POST', '/claims', input);
+    return this.request<Claim>('POST', '/claims', input);
   }
   listClaims(): Promise<{ claims: Claim[] }> { return this.request('GET', '/claims'); }
   getClaim(claimId: string): Promise<Claim> { return this.request('GET', `/claims/${claimId}`); }

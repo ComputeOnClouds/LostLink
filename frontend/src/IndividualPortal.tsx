@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ApiClient, Claim, MatchSuggestion, Report } from './api';
 import { ClaimDetailPanel, ClaimSubmission } from './ClaimWorkflow';
 import { DescriptionBlock } from './DescriptionDisclosure';
@@ -106,15 +106,24 @@ function MatchesAndClaims({ api, reports, version }: { api: ApiClient; reports: 
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
+  const refreshSequence = useRef(0);
   async function refresh(background = false) {
+    const requestId = ++refreshSequence.current;
     if (!background) setLoading(true);
-    try {
-      const [matchResult, claimResult] = await Promise.all([api.listMatches(), api.listClaims()]);
-      setMatches(matchResult.matches.sort((a, b) => a.queryItemId.localeCompare(b.queryItemId) || b.score - a.score || a.candidateItemId.localeCompare(b.candidateItemId)));
-      setClaims(claimResult.claims.sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "")));
-      setError(null);
-    } catch (err) { setError(err instanceof Error ? err.message : "Could not check claims and matches."); }
-    finally { setLoading(false); }
+    const results = await Promise.allSettled([
+      api.listMatches().then((result) => {
+        if (requestId !== refreshSequence.current) return;
+        setMatches(result.matches.sort((a, b) => a.queryItemId.localeCompare(b.queryItemId) || b.score - a.score || a.candidateItemId.localeCompare(b.candidateItemId)));
+      }),
+      api.listClaims().then((result) => {
+        if (requestId !== refreshSequence.current) return;
+        setClaims(result.claims.sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "")));
+      }),
+    ]);
+    if (requestId !== refreshSequence.current) return;
+    const failure = results.find((result) => result.status === 'rejected');
+    setError(failure?.status === 'rejected' ? (failure.reason instanceof Error ? failure.reason.message : 'Could not refresh all results. Try again.') : null);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -148,10 +157,12 @@ function MatchesAndClaims({ api, reports, version }: { api: ApiClient; reports: 
                   api={api}
                   match={match}
                   onCancel={() => setClaiming(null)}
-                  onSubmitted={async () => {
+                  onSubmitted={async (created) => {
+                    ++refreshSequence.current;
+                    setClaims((previous) => [created, ...previous.filter((claim) => claim.claimId !== created.claimId)]);
                     setClaiming(null);
                     setNote('Claim submitted. The organisation will review your evidence.');
-                    await refresh();
+                    await refresh(true);
                   }}
                 />
               ) : (

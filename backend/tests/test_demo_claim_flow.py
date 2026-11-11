@@ -75,3 +75,37 @@ def test_duplicate_legacy_claim_is_rejected(monkeypatch):
     result = ch._create_claim(Principal('u', 'u@x', ['Individual'], None), dict(queryItemId='l', candidateItemId='f', evidenceText='proof'))
     assert result['statusCode'] == 409
     claims.put_item.assert_not_called()
+
+
+def test_claim_list_reads_fresh_base_rows_when_index_is_stale(monkeypatch):
+    claims = Mock()
+    claims.scan.return_value = {'Items': [dict(claimId='new-claim', claimantId='u',
+        queryItemId='lost', candidateItemId='found', organisationId='org', state='submitted', revision=1)]}
+    claims.query.return_value = {'Items': []}  # index has not caught up with creation
+    monkeypatch.setattr(ch, '_claims', lambda: claims)
+    response = ch._list_claims(Principal('u', 'u@x', ['Individual'], None))
+    assert [c['claimId'] for c in json.loads(response['body'])['claims']] == ['new-claim']
+    assert claims.scan.call_args.kwargs['ConsistentRead'] is True
+    claims.query.assert_not_called()
+
+
+def test_consistent_claim_list_paginates_and_enforces_owner_boundary(monkeypatch):
+    claims = Mock()
+    claims.scan.side_effect = [
+        {'Items': [], 'LastEvaluatedKey': {'claimId': 'cursor'}},
+        {'Items': [dict(claimId='mine', claimantId='u'), dict(claimId='other', claimantId='someone-else')]},
+    ]
+    monkeypatch.setattr(ch, '_claims', lambda: claims)
+    assert [c['claimId'] for c in ch._current_claim_rows('claimantId', 'u')] == ['mine']
+    assert claims.scan.call_args.kwargs['ExclusiveStartKey'] == {'claimId': 'cursor'}
+    assert all(call.kwargs['ConsistentRead'] for call in claims.scan.call_args_list)
+
+
+def test_staff_list_sees_new_claim_without_waiting_for_org_index(monkeypatch):
+    claims = Mock()
+    claims.scan.return_value = {'Items': [dict(claimId='fresh', organisationId='org'), dict(claimId='private', organisationId='another-org')]}
+    monkeypatch.setattr(ch, '_claims', lambda: claims)
+    monkeypatch.setattr(ch, '_staff_claim_view', lambda row: {'claimId': row['claimId']})
+    response = ch._list_org_claims(Principal('s', 's@x', ['Staff'], 'org'))
+    assert json.loads(response['body'])['claims'] == [{'claimId': 'fresh'}]
+    claims.query.assert_not_called()

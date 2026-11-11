@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ApiClient, FoundItem, StaffClaim } from './api';
 import { ClaimDetailPanel } from './ClaimWorkflow';
 import { DescriptionBlock } from './DescriptionDisclosure';
@@ -109,14 +109,21 @@ function ClaimReview({ api, onInventoryChanged }: { api: ApiClient; onInventoryC
   const [error, setError] = useState<string | null>(null);
   const [openClaim, setOpenClaim] = useState<string | null>(null);
 
+  const refreshSequence = useRef(0);
   async function refresh(background = false) {
+    const requestId = ++refreshSequence.current;
     if (!background) setLoading(true);
-    try { setClaims((await api.listOrgClaims()).claims.sort((a, b) => {
-      const priority = (s: string) => s === "submitted" ? 0 : ["approved", "reserved"].includes(s) ? 1 : s === "info_requested" ? 2 : 3;
-      return priority(a.state) - priority(b.state) || (b.updatedAt || "").localeCompare(a.updatedAt || "");
-    })); setError(null); }
-    catch (err) { setError(err instanceof Error ? err.message : "Claims could not be loaded."); }
-    finally { setLoading(false); }
+    try {
+      const result = await api.listOrgClaims();
+      if (requestId !== refreshSequence.current) return;
+      setClaims(result.claims.sort((a, b) => {
+        const priority = (s: string) => s === "submitted" ? 0 : ["approved", "reserved"].includes(s) ? 1 : s === "info_requested" ? 2 : 3;
+        return priority(a.state) - priority(b.state) || (b.updatedAt || "").localeCompare(a.updatedAt || "");
+      }));
+      setError(null);
+    } catch (err) {
+      if (requestId === refreshSequence.current) setError(err instanceof Error ? err.message : "Claims could not be loaded.");
+    } finally { if (requestId === refreshSequence.current) setLoading(false); }
   }
 
   useEffect(() => {

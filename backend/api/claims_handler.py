@@ -28,7 +28,7 @@ from pathlib import PurePath
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import boto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 from boto3.dynamodb.types import TypeSerializer
 
 from pipeline.impl.ddb_mapping import ddb_to_item, now_iso
@@ -193,15 +193,29 @@ def _create_claim(principal, body) -> dict:
         if _is_conflict(exc):
             return error(409, "You already have a claim for this match. Refresh My claims.")
         raise
-    return respond(201, {"claimId": claim_id, "state": item["state"]})
+    return respond(201, _claim_view(item))
+
+
+def _current_claim_rows(field, value):
+    """Read the small prototype claim table consistently, including every page.
+
+    GSIs cannot provide read-after-write consistency. A filtered base-table scan
+    trades throughput for immediate demo feedback; at scale, replace this with a
+    partitioned claim table that supports consistent owner/organisation queries.
+    """
+    params = {"ConsistentRead": True, "FilterExpression": Attr(field).eq(value)}
+    rows = []
+    while True:
+        page = _claims().scan(**params)
+        rows.extend(row for row in page.get("Items", []) if row.get(field) == value)
+        if not page.get("LastEvaluatedKey"):
+            return rows
+        params["ExclusiveStartKey"] = page["LastEvaluatedKey"]
 
 
 def _list_claims(principal) -> dict:
     principal.require_individual()
-    rows = _claims().query(
-        IndexName="by-owner",
-        KeyConditionExpression=Key("claimantId").eq(principal.user_id),
-    ).get("Items", [])
+    rows = _current_claim_rows("claimantId", principal.user_id)
     return respond(200, {"claims": [_claim_view(c) for c in rows]})
 
 
@@ -293,10 +307,7 @@ def _cancel_claim(principal, claim_id, body=None) -> dict:
 def _list_org_claims(principal) -> dict:
     """Claims against the caller's organisation (staff can see full evidence)."""
     principal.require_staff()
-    rows = _claims().query(
-        IndexName="by-org-type",
-        KeyConditionExpression=Key("organisationId").eq(principal.organisation_id),
-    ).get("Items", [])
+    rows = _current_claim_rows("organisationId", principal.organisation_id)
     return respond(200, {"claims": [_staff_claim_view(c) for c in rows]})
 
 

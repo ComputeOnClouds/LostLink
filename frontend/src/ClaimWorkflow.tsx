@@ -14,7 +14,7 @@ export function ClaimSubmission({
 }: {
   api: ApiClient;
   match: MatchSuggestion;
-  onSubmitted: () => Promise<void>;
+  onSubmitted: (created: Claim) => Promise<void>;
   onCancel: () => void;
 }) {
   const [text, setText] = useState('');
@@ -32,13 +32,13 @@ export function ClaimSubmission({
     }
     setBusy(true);
     try {
-      await api.submitClaim({
+      const created = await api.submitClaim({
         queryItemId: match.queryItemId,
         candidateItemId: match.candidateItemId,
         evidenceText: text.trim(),
         evidenceKeys: keys,
       });
-      await onSubmitted();
+      await onSubmitted(created);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Claim submission failed.');
     } finally {
