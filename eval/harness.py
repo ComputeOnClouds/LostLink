@@ -30,11 +30,14 @@ from metrics import RankedQuery, hit_at_1, recall_at_k, mrr, notification_metric
 
 _scorer = BlendedScorer(float(os.environ.get("LOCATION_HALF_DISTANCE_METRES", "500")))
 
-# Weight variants compared in the evaluation (RATIONALE ADR-004). Image variants are
-# reserved for when Option 2 is enabled.
+# Weight variants compared in the evaluation (RATIONALE ADR-004): the production weights
+# (backend/pipeline/impl/profile.py) with components switched off. BlendedScorer divides by
+# the sum of the weights it uses, so the remaining weights are renormalized. Image variants
+# are reserved for when Option 2 is enabled.
 VARIANTS: dict[str, dict[str, float]] = {
-    "text_only": {"text": 1.0, "location": 0.0, "time": 0.0},
-    "text_location": {"text": 0.7, "location": 0.3, "time": 0.0},
+    "text_only": {"text": 0.6, "location": 0.0, "time": 0.0},
+    "text_location": {"text": 0.6, "location": 0.25, "time": 0.0},
+    "text_time": {"text": 0.6, "location": 0.0, "time": 0.15},
     "text_location_time": {"text": 0.6, "location": 0.25, "time": 0.15},
 }
 
@@ -79,27 +82,38 @@ def rank_variant(dataset: dict, weights: dict[str, float]) -> list[RankedQuery]:
 @dataclass
 class VariantReport:
     variant: str
+    threshold: float
     hit_at_1: float
     recall_at_5: float
     mrr: float
     alert_precision: float
+    true_match_recall: float
+    incorrect_alerts: int
     false_alert_rate: float
-    missed_notification_rate: float
 
 
 def evaluate(dataset: dict, threshold: float = 0.7) -> list[VariantReport]:
+    """Metrics per variant at one threshold.
+
+    The worker only stores matches scoring at or above the threshold, so Hit@1, Recall@5 and
+    MRR rank only those: a true match below the threshold counts as not found.
+    """
     reports = []
     for name, weights in VARIANTS.items():
         queries = rank_variant(dataset, weights)
+        shown = [RankedQuery(q.query_id, [c for c, s in zip(q.ranked, q.scores) if s >= threshold],
+                             [s for s in q.scores if s >= threshold], q.truth) for q in queries]
         nm = notification_metrics(queries, threshold)
         reports.append(VariantReport(
             variant=name,
-            hit_at_1=round(hit_at_1(queries), 4),
-            recall_at_5=round(recall_at_k(queries, 5), 4),
-            mrr=round(mrr(queries), 4),
+            threshold=threshold,
+            hit_at_1=round(hit_at_1(shown), 4),
+            recall_at_5=round(recall_at_k(shown, 5), 4),
+            mrr=round(mrr(shown), 4),
             alert_precision=round(nm.alert_precision, 4),
+            true_match_recall=round(1 - nm.missed_notification_rate, 4),
+            incorrect_alerts=nm.incorrect_alerts,
             false_alert_rate=round(nm.false_alert_rate, 4),
-            missed_notification_rate=round(nm.missed_notification_rate, 4),
         ))
     return reports
 

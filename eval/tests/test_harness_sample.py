@@ -54,3 +54,11 @@ def test_geographic_ranking_uses_coordinates_and_explicit_radius():
     assert ranked.ranked.index("near") < ranked.ranked.index("far")
     ds["lost"][0]["searchRadiusMetres"] = 500
     assert rank_variant(ds, VARIANTS["text_location"])[0].ranked == ["near"]
+
+
+def test_true_match_below_threshold_counts_as_not_found():
+    # The worker only stores matches at or above the threshold, so ranking metrics skip the rest.
+    ds = load_dataset(SAMPLE)
+    text_only = {r.threshold: r for t in (0.7, 0.999) for r in evaluate(ds, threshold=t) if r.variant == "text_only"}
+    assert text_only[0.7].hit_at_1 == 1.0
+    assert text_only[0.999].hit_at_1 == text_only[0.999].recall_at_5 == text_only[0.999].mrr == 0.0
