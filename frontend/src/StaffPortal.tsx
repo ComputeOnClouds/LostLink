@@ -9,13 +9,15 @@ import { formatLocalTime } from './time';
 export function StaffPortal({ api, organisationId }: { api: ApiClient; organisationId: string | null }) {
   const [items, setItems] = useState<FoundItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState<FoundItem | null>(null);
 
   async function refresh(search?: string) {
     setLoading(true);
-    try { setItems((await api.listItems(search)).items); }
+    try { setItems((await api.listItems(search)).items); setError(null); }
+    catch (err) { setError(err instanceof Error ? err.message : "Inventory could not be loaded."); }
     finally { setLoading(false); }
   }
 
@@ -27,7 +29,7 @@ export function StaffPortal({ api, organisationId }: { api: ApiClient; organisat
         <div className="notice err">Your staff account isn’t linked to an organisation. Contact the LostLink administrator.</div>
       )}
 
-      <ClaimReview api={api} />
+      <ClaimReview api={api} onInventoryChanged={refresh} />
 
       <section className="card">
         <h2>Register a found item</h2>
@@ -48,6 +50,7 @@ export function StaffPortal({ api, organisationId }: { api: ApiClient; organisat
         <div className="section-heading">
           <div><h2>Inventory</h2><p className="meta">{organisationId}</p></div>
         </div>
+        {error && <div className="notice err" role="alert">{error}</div>}
         <form className="search-row" onSubmit={(event) => { event.preventDefault(); void refresh(query.trim() || undefined); }}>
           <label className="sr-only" htmlFor="inventory-search">Search inventory</label>
           <input id="inventory-search" placeholder="Search description…" value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -100,18 +103,27 @@ export function StaffPortal({ api, organisationId }: { api: ApiClient; organisat
   );
 }
 
-function ClaimReview({ api }: { api: ApiClient }) {
+function ClaimReview({ api, onInventoryChanged }: { api: ApiClient; onInventoryChanged: () => Promise<void> }) {
   const [claims, setClaims] = useState<StaffClaim[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [openClaim, setOpenClaim] = useState<string | null>(null);
 
-  async function refresh() {
-    setLoading(true);
-    try { setClaims((await api.listOrgClaims()).claims); }
+  async function refresh(background = false) {
+    if (!background) setLoading(true);
+    try { setClaims((await api.listOrgClaims()).claims.sort((a, b) => {
+      const priority = (s: string) => s === "submitted" ? 0 : ["approved", "reserved"].includes(s) ? 1 : s === "info_requested" ? 2 : 3;
+      return priority(a.state) - priority(b.state) || (b.updatedAt || "").localeCompare(a.updatedAt || "");
+    })); setError(null); }
+    catch (err) { setError(err instanceof Error ? err.message : "Claims could not be loaded."); }
     finally { setLoading(false); }
   }
 
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    void refresh();
+    const timer = window.setInterval(() => { if (!document.hidden) void refresh(true); }, 5000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return (
     <section className="card">
@@ -119,6 +131,8 @@ function ClaimReview({ api }: { api: ApiClient }) {
         <h2>Ownership claims</h2>
         <button className="secondary sm" onClick={() => void refresh()}>Refresh</button>
       </div>
+      <p className="meta">Open a claim, compare the proof with your found item, then approve and reserve or ask for more information.</p>
+      {error && <div className="notice err" role="alert">{error}</div>}
       {loading ? <p className="empty">Loading claims…</p> : claims.length === 0 ? (
         <p className="empty">No claims yet. New ownership claims will appear here.</p>
       ) : (
@@ -129,13 +143,14 @@ function ClaimReview({ api }: { api: ApiClient }) {
                 <span className={`badge ${claim.state}`}>{claimStateLabel(claim.state)}</span>
                 <span className="meta">Updated {formatLocalTime(claim.updatedAt)}</span>
               </div>
+              <div className="title">{claim.itemDescription || "Found item"}</div>
               <div className="evidence"><strong>Evidence:</strong> {claim.evidenceText || '(files only)'}</div>
               <div className="btn-row"><button className="secondary sm" onClick={() => setOpenClaim(claim.claimId)}>View claim</button></div>
             </li>
           ))}
         </ul>
       )}
-      {openClaim && <ClaimDetailPanel api={api} claimId={openClaim} role="staff" onClose={() => setOpenClaim(null)} onChanged={refresh} />}
+      {openClaim && <ClaimDetailPanel api={api} claimId={openClaim} role="staff" onClose={() => setOpenClaim(null)} onChanged={async () => { await refresh(); await onInventoryChanged(); }} />}
     </section>
   );
 }

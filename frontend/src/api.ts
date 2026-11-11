@@ -57,6 +57,8 @@ export interface ClaimMessage {
 }
 
 export interface Claim {
+  candidateItemId?: string;
+  itemDescription?: string | null;
   claimId: string;
   queryItemId: string;
   organisationId: string;
@@ -212,10 +214,11 @@ export class ApiClient {
     claimId: string,
     action: 'request-info' | 'approve' | 'reject' | 'reserve' | 'handover',
     revision: number,
-    message?: string
+    message?: string,
+    collectionInstructions?: string
   ) {
     return this.request<{ state: string; revision: number }>(
-      'POST', `/org/claims/${claimId}/${action}`, { message, revision }
+      'POST', `/org/claims/${claimId}/${action}`, { message, revision, collectionInstructions }
     );
   }
 }

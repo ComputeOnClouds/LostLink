@@ -21,12 +21,12 @@ const ITEM_STATUS: Record<string, string> = {
 
 // Claim state (7-state machine).
 const CLAIM_STATE: Record<string, string> = {
-  submitted: 'submitted',
-  info_requested: 'info requested',
+  submitted: 'awaiting staff review',
+  info_requested: 'your reply needed',
   approved: 'approved',
   rejected: 'rejected',
-  reserved: 'reserved',
-  handed_over: 'handed over',
+  reserved: 'ready for collection',
+  handed_over: 'collected',
   cancelled: 'cancelled',
 };
 

@@ -81,7 +81,9 @@ export function ClaimDetailPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reply, setReply] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
   const [question, setQuestion] = useState('');
+  const [collectionInstructions, setCollectionInstructions] = useState('');
   const [rejectNote, setRejectNote] = useState('');
   const [keys, setKeys] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -157,7 +159,7 @@ export function ClaimDetailPanel({
       await onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Reply failed.');
-      if (err instanceof ApiError && err.status === 409) await refresh();
+      if (err instanceof ApiError && err.status === 409) { await refresh(); setError(err.message); }
     } finally { setBusy(false); }
   }
 
@@ -168,17 +170,22 @@ export function ClaimDetailPanel({
       setError('Enter the information you need from the claimant.');
       return;
     }
+    if (action === 'approve' && !collectionInstructions.trim()) {
+      setError('Add collection instructions so the claimant knows where and how to collect the item.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      await api.claimAction(claim.claimId, action, claim.revision, message);
+      await api.claimAction(claim.claimId, action, claim.revision, message, action === "approve" ? collectionInstructions.trim() : undefined);
+      setNotice(action === 'approve' ? 'Ownership approved and item reserved. The claimant can now see the item details.' : action === 'handover' ? 'Handover recorded. This claim is complete.' : action === 'request-info' ? 'Question sent. Waiting for the claimant to reply.' : 'Claim updated.');
       if (action === 'request-info') setQuestion('');
       if (action === 'reject') setRejectNote('');
       await refresh();
       await onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action failed.');
-      if (err instanceof ApiError && err.status === 409) await refresh();
+      if (err instanceof ApiError && err.status === 409) { await refresh(); setError(err.message); }
     } finally { setBusy(false); }
   }
 
@@ -192,10 +199,12 @@ export function ClaimDetailPanel({
             <h2 id="claim-panel-title">Claim details</h2>
             {claim && <span className={`badge ${claim.state}`}>{claimStateLabel(claim.state)}</span>}
           </div>
+          <button type="button" className="secondary sm" disabled={busy || loading} onClick={() => void refresh()}>Refresh status</button>
           <button ref={closeRef} type="button" className="secondary sm" onClick={onClose}>Close</button>
         </header>
         <div className="panel-body">
           {loading && <p className="empty">Loading claim…</p>}
+          {notice && <div className="notice ok" role="status">{notice}</div>}
           {error && <div className="notice err" role="alert">{error}</div>}
           {claim && (
             <>
@@ -211,7 +220,7 @@ export function ClaimDetailPanel({
 
               {claim.item && (
                 <section className="detail-section verified-item">
-                  <h3>Verified item</h3>
+                  <h3>{role === "staff" ? "Found item — compare with ownership evidence" : "Your verified item"}</h3>
                   {claim.item.photoUrl && <img className="photo-preview" src={claim.item.photoUrl} alt="Verified found item" />}
                   <DescriptionBlock description={claim.item.description} />
                   <p className="meta">{claim.item.location?.name || claim.item.locationZone}</p>
@@ -243,7 +252,9 @@ export function ClaimDetailPanel({
                   <button disabled={busy || uploading}>{busy ? 'Sending…' : 'Send reply'}</button>
                 </form>
               )}
-              {role === 'claimant' && claim.state === 'submitted' && <div className="notice info">Awaiting staff review.</div>}
+              {role === 'claimant' && claim.state === 'submitted' && <div className="notice info">Waiting for staff to review your evidence. Close this panel to follow automatic status updates.</div>}
+              {claim.state === 'handed_over' && <div className="notice ok">Item collected. This case is complete.</div>}
+              {['approved', 'reserved'].includes(claim.state) && <div className="notice info">{role === 'staff' ? 'Ownership verified. Record handover only when the claimant collects the item in person.' : 'Ownership verified. Arrange collection with the organisation and bring your ownership evidence.'}</div>}
 
               {role === 'staff' && claim.state === 'submitted' && (
                 <section className="detail-section action-box">
@@ -251,7 +262,8 @@ export function ClaimDetailPanel({
                   <label className="field"><span>Question for claimant</span><textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask for a specific detail" /></label>
                   <button type="button" className="secondary" disabled={busy} onClick={() => void staffAction('request-info')}>Request information</button>
                   <div className="decision-row">
-                    <button type="button" disabled={busy} onClick={() => void staffAction('approve')}>Approve ownership</button>
+                    <label className="field"><span>Collection instructions</span><textarea value={collectionInstructions} onChange={(event) => setCollectionInstructions(event.target.value)} maxLength={1000} placeholder="Collection desk, opening hours, contact details and what to bring" /></label>
+                    <button type="button" disabled={busy} onClick={() => void staffAction('approve')}>{busy ? 'Saving…' : 'Approve and reserve for collection'}</button>
                     <label className="field"><span>Rejection note <span className="hint">(optional)</span></span><input value={rejectNote} onChange={(event) => setRejectNote(event.target.value)} /></label>
                     <button type="button" className="danger" disabled={busy} onClick={() => void staffAction('reject')}>Reject claim</button>
                   </div>
@@ -266,7 +278,7 @@ export function ClaimDetailPanel({
               )}
               {role === 'staff' && claim.state === 'approved' && (
                 <div className="detail-section action-box btn-row">
-                  <button disabled={busy} onClick={() => void staffAction('reserve')}>Reserve for collection</button>
+                  <button disabled={busy} onClick={() => void staffAction('reserve')}>Reserve for collection (older approval)</button>
                   <button className="secondary" disabled={busy} onClick={() => void staffAction('handover')}>Record handover</button>
                 </div>
               )}

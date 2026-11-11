@@ -20,6 +20,7 @@ the claim (claim_state.details_visible). Enforced in every response here.
 from __future__ import annotations
 
 import os
+import hashlib
 import sys
 import uuid
 from pathlib import PurePath
@@ -42,6 +43,7 @@ _MATCHES_TABLE = os.environ.get("MATCHES_TABLE")
 _CLAIMS_TABLE = os.environ.get("CLAIMS_TABLE")
 
 _ddb = boto3.resource("dynamodb")
+_ddb_client = boto3.client("dynamodb")
 _serializer = TypeSerializer()
 _ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "application/pdf"}
 _MAX_EVIDENCE_BYTES = int(os.environ.get("MAX_EVIDENCE_BYTES", str(10 * 1024 * 1024)))
@@ -145,10 +147,25 @@ def _create_claim(principal, body) -> dict:
     match = _matches().get_item(
         Key={"queryItemId": query_item_id, "candidateItemId": candidate_item_id}
     ).get("Item")
-    if not match:
-        raise AuthError(404, "No such match suggestion.")
+    if not match or match.get("active", True) is False or report.get("status") == "withdrawn":
+        raise AuthError(404, "This match is no longer available.")
+    found = _items().get_item(Key={"itemId": candidate_item_id}).get("Item")
+    if not found or found.get("status") != "available":
+        return error(409, "This item is no longer available for a new claim.")
+    # Also cover claims created before deterministic IDs were introduced.
+    params = {"IndexName": "by-owner", "KeyConditionExpression": Key("claimantId").eq(principal.user_id)}
+    while True:
+        page = _claims().query(**params)
+        for existing in page.get("Items", []):
+            if (existing.get("queryItemId") == query_item_id
+                    and existing.get("candidateItemId") == candidate_item_id
+                    and existing.get("state") not in {cs.STATE_CANCELLED, cs.STATE_REJECTED}):
+                return error(409, "You already have a claim for this match. Open My claims to follow its progress.")
+        if not page.get("LastEvaluatedKey"):
+            break
+        params["ExclusiveStartKey"] = page["LastEvaluatedKey"]
 
-    claim_id = f"claim-{uuid.uuid4().hex}"
+    claim_id = "claim-" + hashlib.sha256(f"{principal.user_id}:{query_item_id}:{candidate_item_id}".encode()).hexdigest()
     now = now_iso()
     item = {
         "claimId": claim_id,
@@ -165,7 +182,17 @@ def _create_claim(principal, body) -> dict:
         "createdAt": now,
         "updatedAt": now,
     }
-    _claims().put_item(Item=item)
+    try:
+        _claims().put_item(
+            Item=item,
+            ConditionExpression="attribute_not_exists(claimId) OR #s IN (:cancelled, :rejected)",
+            ExpressionAttributeNames={"#s": "state"},
+            ExpressionAttributeValues={":cancelled": cs.STATE_CANCELLED, ":rejected": cs.STATE_REJECTED},
+        )
+    except Exception as exc:
+        if _is_conflict(exc):
+            return error(409, "You already have a claim for this match. Refresh My claims.")
+        raise
     return respond(201, {"claimId": claim_id, "state": item["state"]})
 
 
@@ -294,6 +321,14 @@ def _staff_transition(principal, claim_id, action, body) -> dict:
         return error(400, "Enter the information you need from the claimant.")
     if note:
         messages.append({"from": "staff", "text": note, "at": now_iso()})
+    # Approval and reservation are one user action and one database transaction.
+    collection_instructions = None
+    if action == "approve":
+        collection_instructions = body.get("collectionInstructions")
+        if not isinstance(collection_instructions, str) or not 1 <= len(collection_instructions.strip()) <= 1000:
+            return error(400, "Add collection instructions (up to 1000 characters) before approving.")
+        collection_instructions = collection_instructions.strip()
+        new_state = cs.STATE_RESERVED
     current_revision = int(claim.get("revision", 0))
     expected_revision = int(body.get("revision", current_revision))
     updated_at = now_iso()
@@ -308,6 +343,7 @@ def _staff_transition(principal, claim_id, action, body) -> dict:
                 expected_revision=expected_revision,
                 next_revision=current_revision + 1,
                 updated_at=updated_at,
+                **({"collection_instructions": collection_instructions} if collection_instructions else {}),
             )
         else:
             _claims().update_item(
@@ -322,7 +358,7 @@ def _staff_transition(principal, claim_id, action, body) -> dict:
             )
     except Exception as exc:
         if _is_conflict(exc):
-            return error(409, "This claim changed in another session. Refresh before taking action.")
+            return error(409, "The claim changed or this item is reserved for another claim. Refresh and review its current status.")
         raise
 
     # Notify the claimant of the decision (privacy-safe: no item details in the message).
@@ -333,26 +369,31 @@ def _staff_transition(principal, claim_id, action, body) -> dict:
 
 def _transact_claim_and_item(
     *, claim_id, candidate_item_id, expected_state, new_state, messages,
-    expected_revision, next_revision, updated_at,
+    expected_revision, next_revision, updated_at, collection_instructions=None,
 ) -> None:
     """Atomically advance collection state and the found-item lifecycle."""
     item_status = "reserved" if new_state == cs.STATE_RESERVED else "closed"
-    item_condition = "#s = :available" if item_status == "reserved" else "#s IN (:available, :reserved)"
+    # Bind a reservation to its claim so a competing approval/handover cannot win.
+    item_condition = "(#s = :available OR (#s = :reserved AND reservedForClaim = :claim))"
+    if new_state == cs.STATE_HANDED_OVER and expected_state == cs.STATE_RESERVED:
+        # Compatibility for reservations made before reservation ownership was stored.
+        item_condition = "(#s = :available OR (#s = :reserved AND (reservedForClaim = :claim OR attribute_not_exists(reservedForClaim))))"
 
     def av(values):
         return {key: _serializer.serialize(value) for key, value in values.items()}
 
-    _ddb.meta.client.transact_write_items(TransactItems=[
+    _ddb_client.transact_write_items(TransactItems=[
         {
             "Update": {
                 "TableName": _CLAIMS_TABLE,
                 "Key": {"claimId": {"S": claim_id}},
-                "UpdateExpression": "SET #s = :s, messages = :m, updatedAt = :u, revision = :nr",
+                "UpdateExpression": "SET #s = :s, messages = :m, updatedAt = :u, revision = :nr" + (", collectionInstructions = :ci" if collection_instructions else ""),
                 "ConditionExpression": "#s = :es AND (attribute_not_exists(revision) OR revision = :er)",
                 "ExpressionAttributeNames": {"#s": "state"},
                 "ExpressionAttributeValues": av({
                     ":s": new_state, ":es": expected_state, ":m": messages,
                     ":u": updated_at, ":er": expected_revision, ":nr": next_revision,
+                    **({":ci": collection_instructions} if collection_instructions else {}),
                 }),
             }
         },
@@ -360,13 +401,14 @@ def _transact_claim_and_item(
             "Update": {
                 "TableName": _ITEMS_TABLE,
                 "Key": {"itemId": {"S": candidate_item_id}},
-                "UpdateExpression": "SET #s = :status, revision = if_not_exists(revision, :zero) + :one, updatedAt = :u",
+                "UpdateExpression": "SET #s = :status, reservedForClaim = :claim, revision = if_not_exists(revision, :zero) + :one, updatedAt = :u",
                 "ConditionExpression": item_condition,
                 "ExpressionAttributeNames": {"#s": "status"},
                 "ExpressionAttributeValues": av({
                     ":status": item_status,
                     ":available": "available",
-                    **({":reserved": "reserved"} if item_status == "closed" else {}),
+                    ":reserved": "reserved",
+                    ":claim": claim_id,
                     ":zero": 0,
                     ":one": 1,
                     ":u": updated_at,
@@ -450,7 +492,7 @@ def notify_withdrawn_claims(organisation_id, candidate_item_id) -> int:
 def _load_org_claim(principal, claim_id):
     if not claim_id:
         raise AuthError(400, "Missing claim id.")
-    claim = _claims().get_item(Key={"claimId": claim_id}).get("Item")
+    claim = _claims().get_item(Key={"claimId": claim_id}, ConsistentRead=True).get("Item")
     if not claim:
         raise AuthError(404, "Claim not found.")
     if claim.get("organisationId") != principal.organisation_id:
@@ -472,6 +514,8 @@ def _staff_claim_view(claim, detailed=False) -> dict:
         "evidenceText": claim.get("evidenceText"),
         "evidenceKeys": claim.get("evidenceKeys", []),
     }
+    found_summary = _items().get_item(Key={"itemId": claim["candidateItemId"]}).get("Item")
+    view["itemDescription"] = found_summary.get("description") if found_summary else None
     if detailed:
         view["messages"] = _message_views(claim.get("messages", []))
         view["attachments"] = _attachment_views(claim.get("evidenceKeys", []))
@@ -491,7 +535,7 @@ def _staff_claim_view(claim, detailed=False) -> dict:
 def _load_own_claim(principal, claim_id):
     if not claim_id:
         raise AuthError(400, "Missing claim id.")
-    claim = _claims().get_item(Key={"claimId": claim_id}).get("Item")
+    claim = _claims().get_item(Key={"claimId": claim_id}, ConsistentRead=True).get("Item")
     if not claim:
         raise AuthError(404, "Claim not found.")
     if claim.get("claimantId") != principal.user_id:
@@ -505,6 +549,7 @@ def _claim_view(claim, detailed=False) -> dict:
     view = {
         "claimId": claim["claimId"],
         "queryItemId": claim.get("queryItemId"),
+        "candidateItemId": claim.get("candidateItemId"),
         "organisationId": claim.get("organisationId"),
         "state": state,
         "createdAt": claim.get("createdAt"),
@@ -529,7 +574,8 @@ def _claim_view(claim, detailed=False) -> dict:
                 "status": found.get("status"),
             }
         view["collection"] = (
-            "Your claim is approved. Please arrange collection with the organisation."
+            "Item collected. This case is complete." if state == cs.STATE_HANDED_OVER else
+            claim.get("collectionInstructions") or "Ownership verified. Contact the holding organisation to arrange collection; bring your ownership evidence."
         )
     else:
         view["item"] = None  # hidden until approval (privacy core)

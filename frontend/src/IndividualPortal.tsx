@@ -10,37 +10,47 @@ export function IndividualPortal({ api }: { api: ApiClient }) {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
   const [editing, setEditing] = useState<Report | null>(null);
 
-  async function refreshReports() {
-    setLoading(true);
-    try { setReports((await api.listReports()).reports); }
+  async function refreshReports(background = false) {
+    if (!background) setLoading(true);
+    try { setReports((await api.listReports()).reports); setError(null); }
+    catch (err) { setError(err instanceof Error ? err.message : "Could not load reports."); }
     finally { setLoading(false); }
   }
 
-  useEffect(() => { void refreshReports(); }, []);
+  useEffect(() => {
+    void refreshReports();
+    const timer = window.setInterval(() => { if (!document.hidden) void refreshReports(true); }, 10000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return (
     <div className="grid portal-grid">
       <section className="card">
-        <h2>Report a lost item</h2>
+        <h2>Find your lost item</h2>
+        <p>Describe it once. We search partner inventories, then staff check your ownership evidence before arranging collection.</p>
         <ItemEditor
           api={api}
           kind="report"
           submitLabel="Submit report"
           onSave={async (input) => {
             await api.createReport(input);
-            setMessage('Report submitted. We’ll notify you if a partner organisation may have it.');
+            setMessage('Search started. Matches will appear automatically below.');
+            setVersion((v) => v + 1);
             await refreshReports();
           }}
         />
         {message && <div className="notice ok" role="status">{message}</div>}
       </section>
 
-      <MatchesAndClaims api={api} />
+      <MatchesAndClaims api={api} reports={reports} version={version} />
 
       <section className="card">
         <h2>My reports</h2>
+        {error && <div className="notice err" role="alert">{error} <button onClick={() => void refreshReports()}>Try again</button></div>}
         {loading ? <p className="empty">Loading reports…</p> : reports.length === 0 ? (
           <p className="empty">No reports yet. Your first report will appear here.</p>
         ) : (
@@ -87,41 +97,53 @@ export function IndividualPortal({ api }: { api: ApiClient }) {
   );
 }
 
-function MatchesAndClaims({ api }: { api: ApiClient }) {
+function MatchesAndClaims({ api, reports, version }: { api: ApiClient; reports: Report[]; version: number }) {
   const [matches, setMatches] = useState<MatchSuggestion[]>([]);
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState<MatchSuggestion | null>(null);
   const [openClaim, setOpenClaim] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
-  async function refresh() {
-    setLoading(true);
+  async function refresh(background = false) {
+    if (!background) setLoading(true);
     try {
       const [matchResult, claimResult] = await Promise.all([api.listMatches(), api.listClaims()]);
       setMatches(matchResult.matches);
-      setClaims(claimResult.claims);
-    } finally { setLoading(false); }
+      setClaims(claimResult.claims.sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "")));
+      setError(null);
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not check claims and matches."); }
+    finally { setLoading(false); }
   }
 
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    void refresh();
+    const timer = window.setInterval(() => { if (!document.hidden) void refresh(true); }, 5000);
+    return () => window.clearInterval(timer);
+  }, [version]);
+
+  const reportName = (id: string) => reports.find((r) => r.itemId === id)?.description || "Photo-based lost report";
 
   return (
     <section className="card">
-      <h2>Potential matches</h2>
+      <div className="section-heading"><h2>Potential matches</h2><button className="secondary sm" disabled={loading} onClick={() => void refresh()}>Refresh status</button></div>
+      <p className="meta">Search → ownership evidence → staff review → collection. Status updates automatically.</p>
+      {error && <div className="notice err" role="alert">{error}</div>}
       {loading ? <p className="empty">Checking matches…</p> : matches.length === 0 ? (
         <p className="empty">No potential matches yet. We’ll notify you if one appears.</p>
       ) : (
         <ul className="list">
           {matches.map((match) => (
             <li key={`${match.queryItemId}:${match.candidateItemId}`} className="tile">
-              <div className="title">{match.message}</div>
+              <div className="title">For your report: {reportName(match.queryItemId)}</div>
+              <p>{match.message}</p>
               <div className="meta">Held by <strong>{match.organisationId}</strong></div>
               <div className="confidence" aria-label={`${Math.round(match.score * 100)} percent match`}>
                 <div className="bar"><span style={{ width: `${Math.round(match.score * 100)}%` }} /></div>
                 <span className="pct">{Math.round(match.score * 100)}% match</span>
               </div>
-              {claiming?.candidateItemId === match.candidateItemId ? (
+              {claiming?.candidateItemId === match.candidateItemId && claiming?.queryItemId === match.queryItemId ? (
                 <ClaimSubmission
                   api={api}
                   match={match}
@@ -133,7 +155,9 @@ function MatchesAndClaims({ api }: { api: ApiClient }) {
                   }}
                 />
               ) : (
-                <div className="btn-row"><button className="sm" onClick={() => setClaiming(match)}>This is mine — submit a claim</button></div>
+                <div className="btn-row">{claims.some((c) => c.queryItemId === match.queryItemId && c.candidateItemId === match.candidateItemId && !['cancelled', 'rejected'].includes(c.state))
+                  ? <span className="notice info">Claim already submitted — follow its progress below.</span>
+                  : <button className="sm" onClick={() => setClaiming(match)}>Verify ownership</button>}</div>
               )}
             </li>
           ))}
@@ -148,7 +172,7 @@ function MatchesAndClaims({ api }: { api: ApiClient }) {
           {claims.map((claim) => (
             <li key={claim.claimId} className="tile">
               <div className="tile-heading">
-                <div>Claim to <strong>{claim.organisationId}</strong></div>
+                <div><strong>{reportName(claim.queryItemId)}</strong><div className="meta">Claim to {claim.organisationId}</div></div>
                 <span className={`badge ${claim.state}`}>{claimStateLabel(claim.state)}</span>
               </div>
               {claim.item ? (
@@ -156,7 +180,7 @@ function MatchesAndClaims({ api }: { api: ApiClient }) {
                   <DescriptionBlock description={claim.item.description} />
                   <p>{claim.collection}</p>
                 </div>
-              ) : <div className="hidden-note">Item details stay hidden until the organisation approves your claim.</div>}
+              ) : <div className="hidden-note">{claim.state === "submitted" ? "Waiting for staff to review your proof. No action needed." : claim.state === "info_requested" ? "Staff need more proof. Open your claim to read the question and reply." : claim.state === "rejected" ? "Claim declined. Open it to read the staff response." : "This claim is cancelled."}</div>}
               <div className="btn-row">
                 <button className="secondary sm" onClick={() => setOpenClaim(claim.claimId)}>View claim</button>
                 {['submitted', 'info_requested'].includes(claim.state) && (

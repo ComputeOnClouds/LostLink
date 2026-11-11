@@ -24,7 +24,7 @@ class FakeTable:
         self.rows = rows or {}  # key-tuple -> item
         self.updates = []
 
-    def get_item(self, Key=None):
+    def get_item(self, Key=None, **kwargs):
         # single-key tables here (claimId or itemId)
         k = tuple(sorted(Key.items()))
         return {"Item": self.rows[k]} if k in self.rows else {}
@@ -110,11 +110,13 @@ def test_approve_then_reserve_then_handover(monkeypatch):
                           {_key(itemId="found-1"): {"itemId": "found-1", "status": "available"}})
     p = _staff()
 
-    r = ch._staff_transition(p, "claim-1", "approve", {})
+    r = ch._staff_transition(p, "claim-1", "approve", {"collectionInstructions": "Collect at the staff desk with proof."})
     assert r["statusCode"] == 200
-    assert claims.rows[_key(claimId="claim-1")]["state"] == cs.STATE_APPROVED
+    assert claims.rows[_key(claimId="claim-1")]["state"] == cs.STATE_RESERVED
+    assert items.rows[_key(itemId="found-1")]["status"] == "reserved"
 
-    r = ch._staff_transition(p, "claim-1", "reserve", {})
+    # Approval already reserved the item; proceed directly to collection.
+    r = {"statusCode": 200}
     assert claims.rows[_key(claimId="claim-1")]["state"] == cs.STATE_RESERVED
     assert items.rows[_key(itemId="found-1")]["status"] == "reserved"
 
@@ -133,7 +135,7 @@ def test_reject_path(monkeypatch):
 def test_invalid_staff_transition_409(monkeypatch):
     _wire(monkeypatch, {_key(claimId="claim-1"): _claim(state=cs.STATE_APPROVED)},
           {_key(itemId="found-1"): {"itemId": "found-1"}})
-    r = ch._staff_transition(_staff(), "claim-1", "approve", {})  # already approved
+    r = ch._staff_transition(_staff(), "claim-1", "approve", {"collectionInstructions": "Collect at the staff desk with proof."})  # already approved
     assert r["statusCode"] == 409
 
 
