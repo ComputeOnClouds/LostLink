@@ -110,7 +110,7 @@ function MatchesAndClaims({ api, reports, version }: { api: ApiClient; reports: 
     if (!background) setLoading(true);
     try {
       const [matchResult, claimResult] = await Promise.all([api.listMatches(), api.listClaims()]);
-      setMatches(matchResult.matches);
+      setMatches(matchResult.matches.sort((a, b) => a.queryItemId.localeCompare(b.queryItemId) || b.score - a.score || a.candidateItemId.localeCompare(b.candidateItemId)));
       setClaims(claimResult.claims.sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "")));
       setError(null);
     } catch (err) { setError(err instanceof Error ? err.message : "Could not check claims and matches."); }
