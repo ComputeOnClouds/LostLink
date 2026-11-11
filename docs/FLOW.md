@@ -201,13 +201,21 @@ design) and in the handlers (org read from the JWT, never the request body). Ful
 
 ## 9. Status → UI mapping
 
+- **Potential matches** lists suggestions without a submitted claim for that report
+  and found-item pair. After submission, follow the claim in **My claims**, including
+  decisions, collection and cancelled claims.
+- Creating a claim atomically writes `submittedClaimId` on the match and the new
+  claim record. Repeat submissions for the pair return 409. Existing claims are
+  checked too, including records created before this guard was introduced.
 - Lost report badge: `pending_match` → "searching…", `matched` → "match found" (green),
   `no_match` → "no match yet", `withdrawn` → "withdrawn".
 - Found item badge: `available` / `reserved` / `closed` / `withdrawn`.
 - Claim badge: the 7 states above, on both the individual's "My claims" and the staff
   "Ownership claims" lists.
-- The UI does not live-poll; a refresh reflects the latest worker-set status and new
-  matches. Labels: `frontend/src/labels.ts`.
+- The individual portal refreshes reports and matches every four seconds during a
+  pending search for up to one minute. It skips polling while hidden and refreshes
+  once when visible again. Use **Refresh results** to check at any time.
+  Labels: `frontend/src/labels.ts`.
 
 ---
 

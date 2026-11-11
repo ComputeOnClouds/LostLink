@@ -9,12 +9,14 @@ import { formatLocalTime } from './time';
 export function ClaimSubmission({
   api,
   match,
+  available,
   onSubmitted,
   onCancel,
 }: {
   api: ApiClient;
   match: MatchSuggestion;
-  onSubmitted: () => Promise<void>;
+  available: boolean;
+  onSubmitted: (claim: Claim) => Promise<void>;
   onCancel: () => void;
 }) {
   const [text, setText] = useState('');
@@ -25,6 +27,7 @@ export function ClaimSubmission({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (!available) return;
     setError(null);
     if (!text.trim() && !keys.length) {
       setError('Describe your proof of ownership or attach at least one file.');
@@ -32,13 +35,16 @@ export function ClaimSubmission({
     }
     setBusy(true);
     try {
-      await api.submitClaim({
+      const created = await api.submitClaim({
         queryItemId: match.queryItemId,
         candidateItemId: match.candidateItemId,
         evidenceText: text.trim(),
         evidenceKeys: keys,
       });
-      await onSubmitted();
+      await onSubmitted({
+        ...created, queryItemId: match.queryItemId, organisationId: match.organisationId,
+        revision: 1, evidenceText: text.trim(), item: null,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Claim submission failed.');
     } finally {
@@ -50,6 +56,7 @@ export function ClaimSubmission({
     <form className="inline-form claim-form" onSubmit={submit}>
       <h4>Submit an ownership claim</h4>
       <p className="form-intro">Share details only the owner would know. Staff will review them privately.</p>
+      {!available && <p className="notice info" role="status">This suggestion is currently unavailable. Your draft is still here if it reappears.</p>}
       <label className="field">
         <span>Proof of ownership</span>
         <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="Distinguishing marks, receipt details, contents, or another private detail" autoFocus />
@@ -57,7 +64,7 @@ export function ClaimSubmission({
       <AttachmentPicker api={api} onChange={(next, pending) => { setKeys(next); setUploading(pending); }} />
       {error && <div className="notice err" role="alert">{error}</div>}
       <div className="btn-row">
-        <button type="submit" disabled={busy || uploading}>{busy ? 'Submitting…' : 'Submit claim'}</button>
+        <button type="submit" disabled={busy || uploading || !available}>{busy ? 'Submitting…' : 'Submit claim'}</button>
         <button type="button" className="secondary" onClick={onCancel}>Cancel</button>
       </div>
     </form>

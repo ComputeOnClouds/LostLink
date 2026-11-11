@@ -197,13 +197,13 @@ export class ApiStack extends cdk.Stack {
       MAX_EVIDENCE_PER_CLAIM: '20',
     });
     props.data.itemsTable.grantReadWriteData(claimsFn); // read items; T12 updates status
-    props.data.matchesTable.grantReadData(claimsFn);
+    props.data.matchesTable.grantReadWriteData(claimsFn); // atomic per-match claim guard
     props.data.claimsTable.grantReadWriteData(claimsFn);
     props.data.photosBucket.grantReadWrite(claimsFn); // evidence uploads
     claimsFn.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['dynamodb:TransactWriteItems'],
-        resources: [props.data.claimsTable.tableArn, props.data.itemsTable.tableArn],
+        resources: [props.data.claimsTable.tableArn, props.data.itemsTable.tableArn, props.data.matchesTable.tableArn],
       })
     );
     claimsFn.addToRolePolicy(

@@ -262,9 +262,40 @@ Open the `LostLink-CloudFrontUrl` (from step 6) in a browser. Walkthrough:
    `zone-library`).
 2. Individual window (incognito): sign in as `user@lostlink.example`, report the matching
    lost item.
-3. Wait ~10s, refresh → a potential match appears. Submit a claim with evidence.
+3. Wait for a potential match to appear automatically, or click **Refresh results**
+   to check again. Submit a claim with evidence.
 4. Staff window: Ownership claims → approve → reserve → handover. The individual now sees
    the item details.
+
+### Releasing match refresh and claim suppression
+
+Deploy `LostLink-Api` and `LostLink-Frontend` using the existing account, region and
+environment configuration, including `ONEMAP_SECRET_ARN`. The API stack update includes
+the Matches table write and transaction permissions required by claim creation.
+The frontend deployment should use a fresh build.
+
+Existing claim records are used to suppress suggestions immediately after deployment.
+New claims atomically set `submittedClaimId` on the corresponding Matches row. The
+matching worker preserves that field when rescoring. A pair stays in **My claims**
+through rejection, approval, collection and cancellation.
+
+Verify in the test environment before release:
+
+1. An existing claimed pair is absent from `GET /matches` after signing in again.
+2. A newly submitted claim appears in **My claims** and opens its original evidence.
+3. Repeating `POST /claims` for the same report/item pair returns 409; concurrent
+   submissions create only one new claim.
+4. Reject or approve a claim, refresh the page and trigger rematching by editing the
+   report. The claimed pair stays absent from potential matches.
+5. An unrelated suggestion remains available. Repeat the role/organisation access
+   and hidden-details checks.
+
+Local checks on 8 November 2026 passed with 117 backend tests, 9 evaluation tests,
+13 browser tests, the frontend production build, infrastructure TypeScript checks
+and API-stack synthesis. SDK request-format tests cover claim creation and
+reservation/handover transactions. Browser tests cover delayed claim-list updates
+and retaining confirmed revisions during index lag. Cloud acceptance checks above
+are still required after deployment.
 
 ---
 

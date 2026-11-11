@@ -161,13 +161,21 @@ or you can sign in with a demo account below. Staff accounts are admin-provision
    `zone-library`).
 2. As an **individual** (self-registered, or a demo account in a separate
    browser/incognito), report the matching lost item.
-3. Wait ~10s; refresh — a **potential match** appears (details hidden). Submit a claim
-   with evidence.
+3. Wait for a **potential match** to appear automatically (details hidden), or click
+   **Refresh results** to check again. Submit a claim with evidence.
 4. As **staff**, open Ownership claims → approve → reserve → handover. The claimant now
    sees the item details.
 
 Local dev: `cd frontend && npm run dev` (fetches `/config.json`; point it at the deployed
 API by serving a local config).
+
+For a manual claims demo, run the same dev server and open
+`http://localhost:5173/tests/claims-demo.html`. This uses the production claim UI with
+browser-local simulated data. Submit text evidence, inspect the claim, switch to the
+staff view to request information/approve/reject, and reload to confirm the claimed
+suggestion stays hidden. The second suggestion appears after about eight seconds to
+exercise automatic refresh. **重置演示数据** starts over. AWS transactions, authorization,
+email, photo uploads and AI matching require separate integration verification.
 
 ## Run tests
 

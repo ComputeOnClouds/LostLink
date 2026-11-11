@@ -173,7 +173,9 @@ export class ApiClient {
     return this.request('POST', '/descriptions/generate', { photoKey, requestId, itemId });
   }
 
-  listReports(): Promise<{ reports: Report[] }> { return this.request('GET', '/reports'); }
+  listReports(signal?: AbortSignal): Promise<{ reports: Report[] }> {
+    return this.request('GET', '/reports', undefined, signal);
+  }
   getReport(itemId: string): Promise<Report> { return this.request('GET', `/reports/${itemId}`); }
   createReport(input: ItemWrite): Promise<{ itemId: string }> { return this.request('POST', '/reports', input); }
   updateReport(itemId: string, input: ItemWrite): Promise<Report & { rematching: boolean }> {
@@ -181,7 +183,9 @@ export class ApiClient {
   }
   withdrawReport(itemId: string): Promise<unknown> { return this.request('DELETE', `/reports/${itemId}`); }
 
-  listMatches(): Promise<{ matches: MatchSuggestion[] }> { return this.request('GET', '/matches'); }
+  listMatches(signal?: AbortSignal): Promise<{ matches: MatchSuggestion[] }> {
+    return this.request('GET', '/matches', undefined, signal);
+  }
   submitClaim(input: { queryItemId: string; candidateItemId: string; evidenceText: string; evidenceKeys?: string[] }) {
     return this.request<{ claimId: string; state: string }>('POST', '/claims', input);
   }
