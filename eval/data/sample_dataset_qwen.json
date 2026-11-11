@@ -4,577 +4,789 @@
    "qwen3.6:35b"
   ],
   "via": "NUS SoClaaS (OpenAI-compatible API), model alias 'default'",
-  "generated_at": "2026-11-11T16:43:12+00:00",
+  "generated_at": "2026-11-11T17:22:15+00:00",
   "temperature": 0.7,
   "prompts": {
    "system": "You write realistic test data for LostLink, a lost-and-found service on the National University of Singapore (NUS) campus. Reply with a JSON array only, without any other text.",
-   "pairs": "Write {n} pairs of descriptions of everyday objects that students or staff lose on campus, one pair per object. Use {n} different objects and vary the kind of object widely. Describe only the object itself, never where or when it was lost or found.\n- \"lost\": what the owner types when reporting it lost, from memory: 8 to 18 words with 2 to 4 details such as colour, brand, marks or contents.\n- \"found\": what a staff member types after finding the same object: the same details in their own words, possibly leaving one out, 6 to 15 words, never \"my\".\n\nReturn a JSON array of {n} objects with the keys \"lost\" and \"found\".",
-   "no_match": "Here are descriptions of objects waiting at a lost-and-found office:\n{found}\n\nWrite {n} lost reports for other objects, which nobody has found. Each is typed by the owner from memory, 8 to 18 words, and describes only the object, never where or when it was lost. None may describe any object above. About half should be the same kind of object as one above but clearly a different one (another colour, brand or mark); the rest should be other kinds of objects.\n\nReturn a JSON array of {n} strings.",
-   "distractors": "Here are lost reports from owners:\n{lost}\n\nWrite {n} entries that staff typed for other objects handed in to the lost-and-found office, which nobody has reported lost. Each describes only the object as a stranger sees it, 6 to 15 words, never \"my\", and never where or when it was found. None may describe any object above. About half should be the same kind of object as one above but clearly a different one (another colour, brand or mark); the rest should be other kinds of objects.\n\nReturn a JSON array of {n} strings."
+   "groups": "Write {n} groups of look-alike everyday objects that students and staff lose on a university campus, three objects per group. The three objects in a group are the same kind of object and look alike: the same colour, and often the same brand (for example three black umbrellas, or three white AirPods cases). They differ only in small details, such as a sticker, a scratch, a keychain or what is inside. Use a different kind of object for each group.\n\nFor each object write two reports. Describe only the object, never where or when it was lost or found.\n- \"lost\": what the owner types when reporting it lost, from memory. Vary the length: about a third of the lost reports are very short, 2 to 4 words (like \"black umbrella\"); the rest are 6 to 15 words and mention one or two identifying details.\n- \"found\": what a staff member types when the object is handed in, 3 to 12 words. Staff describe what they see, in their own words, and often use a generic name instead of the brand. About half the time they mention the same identifying detail as the owner (in different words); otherwise they mention a different detail or none. Never write \"my\".\n\nReturn a JSON array of {n} objects, each with the keys \"kind\" (a few words) and \"objects\" (an array of 3 objects with the keys \"lost\" and \"found\")."
   },
   "calls": [
    {
     "model": "qwen3.6:35b",
-    "prompt": "Write 20 pairs of descriptions of everyday objects that students or staff lose on campus, one pair per object. Use 20 different objects and vary the kind of object widely. Describe only the object itself, never where or when it was lost or found.\n- \"lost\": what the owner types when reporting it lost, from memory: 8 to 18 words with 2 to 4 details such as colour, brand, marks or contents.\n- \"found\": what a staff member types after finding the same object: the same details in their own words, possibly leaving one out, 6 to 15 words, never \"my\".\n\nReturn a JSON array of 20 objects with the keys \"lost\" and \"found\"."
-   },
-   {
-    "model": "qwen3.6:35b",
-    "prompt": "Here are descriptions of objects waiting at a lost-and-found office:\n- Black phone case for Samsung Galaxy, cracked screen protector visible.\n- Blue card holder with student ID and library card inside.\n- Silver AirPods Pro, black keychain on left earbud, dirty stem.\n- Red 21oz Hydro Flask with white lid and lion sticker.\n- Brown leather wallet, torn edge, contains credit cards and photo.\n- Yellow umbrella with broken handle and missing top plastic tip.\n- White Switch console in grey case, worn analog sticks.\n- Green Moleskine notebook, pen clipped to band, notes on first page.\n- Black Ray-Bans, dent on left temple, cloth in case.\n- Blue Nike backpack, missing zipper pull, contains laptop sleeve.\n- Silver Dell charger, frayed cable near connector, tape holding it.\n- Pink Kate Spade wallet, gold hardware, gym card inside.\n- Black Sony headphones, scratch on right cushion, pouch included.\n- Clear bottle, blue lid, half orange juice, name label.\n- Brown passport holder, Japan stamp, Eiffel Tower photo inside.\n- Black mechanical keyboard, blue switches, missing escape key, dusty.\n- Red canvas tote, coffee quote, tear on bottom right seam.\n- White Fitbit Charge 4, grey band, cracked screen, cable.\n- Black leather belt, silver buckle, hole near second position.\n- Blue Samsung tablet, cracked protector, blue case, stylus holder.\n\nWrite 5 lost reports for other objects, which nobody has found. Each is typed by the owner from memory, 8 to 18 words, and describes only the object, never where or when it was lost. None may describe any object above. About half should be the same kind of object as one above but clearly a different one (another colour, brand or mark); the rest should be other kinds of objects.\n\nReturn a JSON array of 5 strings."
-   },
-   {
-    "model": "qwen3.6:35b",
-    "prompt": "Here are lost reports from owners:\n- Black Samsung Galaxy S22 phone case with a cracked screen protector and a small scratch on the bottom left corner.\n- Blue NUS library card holder containing my student ID and a library card from the Main Library.\n- Silver Apple AirPods Pro with a black keychain attached to the left earbud and some dirt near the stem.\n- Red Hydro Flask water bottle, 21oz size, with a white lid and a sticker of the NUS lion on the side.\n- Brown leather wallet with a torn edge, containing three credit cards and a faded photo of a dog.\n- Yellow plastic umbrella with a broken handle, missing the plastic tip at the very top of the shaft.\n- White Nintendo Switch console in a grey carrying case, with Joy-Cons showing minor wear on the analog sticks.\n- Green Moleskine notebook with a pen clipped to the elastic band and handwritten notes on the first page.\n- Black Ray-Ban sunglasses with a small dent on the left temple arm and a microfiber cloth in the case.\n- Blue Nike backpack with a zipper pull that is missing, containing a laptop sleeve and a water bottle.\n- Silver Dell laptop charger with a frayed cable near the connector and a piece of tape holding it together.\n- Pink Kate Spade wallet with gold hardware, containing a membership card for the campus gym and some cash.\n- Black Sony WH-1000XM4 headphones with a scratch on the right ear cup cushion and a carrying pouch.\n- Clear plastic water bottle with a blue lid, containing half a bottle of orange juice and a label with my name.\n- Brown leather passport holder with a stamp from Japan and a photo of the Eiffel Tower inside the window.\n- Black mechanical keyboard with blue switches, missing the escape key cap and having dust between the keys.\n- Red canvas tote bag with a printed quote about coffee and a small tear on the bottom right seam.\n- White Fitbit Charge 4 with a grey band, showing a crack on the screen and a charging cable.\n- Black leather belt with a silver buckle, containing a small hole near the second hole from the end.\n- Blue Samsung tablet with a cracked screen protector, inside a blue protective case with a stylus holder.\n- Orange Samsung phone case with a visible crack on the back cover.\n- Green card holder containing a student ID and library card inside.\n- Gold AirPods Max, silver headband, dirty ear cushions.\n- Blue 21oz Hydro Flask with black lid and tiger sticker.\n- Tan leather wallet, clean edge, contains credit cards and photo.\n\nWrite 5 entries that staff typed for other objects handed in to the lost-and-found office, which nobody has reported lost. Each describes only the object as a stranger sees it, 6 to 15 words, never \"my\", and never where or when it was found. None may describe any object above. About half should be the same kind of object as one above but clearly a different one (another colour, brand or mark); the rest should be other kinds of objects.\n\nReturn a JSON array of 5 strings."
+    "prompt": "Write 10 groups of look-alike everyday objects that students and staff lose on a university campus, three objects per group. The three objects in a group are the same kind of object and look alike: the same colour, and often the same brand (for example three black umbrellas, or three white AirPods cases). They differ only in small details, such as a sticker, a scratch, a keychain or what is inside. Use a different kind of object for each group.\n\nFor each object write two reports. Describe only the object, never where or when it was lost or found.\n- \"lost\": what the owner types when reporting it lost, from memory. Vary the length: about a third of the lost reports are very short, 2 to 4 words (like \"black umbrella\"); the rest are 6 to 15 words and mention one or two identifying details.\n- \"found\": what a staff member types when the object is handed in, 3 to 12 words. Staff describe what they see, in their own words, and often use a generic name instead of the brand. About half the time they mention the same identifying detail as the owner (in different words); otherwise they mention a different detail or none. Never write \"my\".\n\nReturn a JSON array of 10 objects, each with the keys \"kind\" (a few words) and \"objects\" (an array of 3 objects with the keys \"lost\" and \"found\")."
    }
   ],
-  "places_and_times": "12 true pairs are found at the place where they were lost, 1-12 h later; 4 are found at another NUS place 1-12 h later; 4 are found at the same place 2-7 days later. Unmatched lost reports and found items get a random place and day in Sep 2026. Seed 5224."
+  "places_and_times": "In each group the two true pairs are lost on the same day at places at least 800 m apart (groups 1-4: location separates them), at places within 400 m of each other 5-10 days apart (groups 5-8: time separates them), or within 400 m of each other on the same day (groups 9-10: neither does). Items are found where they were lost, 1-12 h later, except six pairs: object 2 of groups 1 and 9 and object 1 of group 5 are found at another place; object 1 of groups 2 and 10 and object 2 of group 6 are found at the same place 2-7 days later. The third object of a group is lost (groups 1-5) or found (groups 6-10) at the group's first place within 3 days in groups 1, 3, 5, 7 and 9, and at a random place and day in the others. Lost times are 09:00-18:00 in Sep 2026. Seed 5224."
  },
+ "groups": [
+  {
+   "kind": "black leather bifold wallet",
+   "objects": [
+    {
+     "lost": "Black wallet, missing ID card slot",
+     "found": "Black leather wallet with a scratch on the corner"
+    },
+    {
+     "lost": "Black wallet",
+     "found": "Bifold wallet, slightly worn edges, no visible brand"
+    },
+    {
+     "lost": "Black leather wallet with a gold clasp",
+     "found": "Black wallet, has a small tear in the lining"
+    }
+   ]
+  },
+  {
+   "kind": "white Apple AirPods case",
+   "objects": [
+    {
+     "lost": "White AirPods case, sticker on back",
+     "found": "White charging case with a faded anime sticker"
+    },
+    {
+     "lost": "White case",
+     "found": "AirPods case, clean, no accessories attached"
+    },
+    {
+     "lost": "White AirPods case, keychain attached",
+     "found": "White case, has a blue silicone strap loop"
+    }
+   ]
+  },
+  {
+   "kind": "blue reusable water bottle",
+   "objects": [
+    {
+     "lost": "Blue Hydro Flask, dent on bottom",
+     "found": "Blue metal bottle, noticeable dent near the base"
+    },
+    {
+     "lost": "Blue bottle",
+     "found": "Blue insulated bottle, cap is slightly loose"
+    },
+    {
+     "lost": "Blue Hydro Flask with name tag",
+     "found": "Blue bottle, has a handwritten name label inside"
+    }
+   ]
+  },
+  {
+   "kind": "black laptop sleeve",
+   "objects": [
+    {
+     "lost": "Black sleeve, zipper broken",
+     "found": "Black neoprene sleeve, zipper is stuck halfway"
+    },
+    {
+     "lost": "Black laptop bag",
+     "found": "Black sleeve, has a small coffee stain on front"
+    },
+    {
+     "lost": "Black sleeve with mesh pocket",
+     "found": "Black sleeve, mesh pocket has a pen inside"
+    }
+   ]
+  },
+  {
+   "kind": "grey university hoodie",
+   "objects": [
+    {
+     "lost": "Grey hoodie, drawstring missing",
+     "found": "Grey hoodie, one drawstring is completely gone"
+    },
+    {
+     "lost": "Grey hoodie",
+     "found": "Grey cotton hoodie, faded logo on chest"
+    },
+    {
+     "lost": "Grey hoodie with pen in pocket",
+     "found": "Grey hoodie, has a blue ballpoint pen in pocket"
+    }
+   ]
+  },
+  {
+   "kind": "black USB flash drive",
+   "objects": [
+    {
+     "lost": "Black USB, label peeling",
+     "found": "Black USB stick, paper label is curling up"
+    },
+    {
+     "lost": "Black drive",
+     "found": "Black USB drive, no visible branding or labels"
+    },
+    {
+     "lost": "Black USB with keychain",
+     "found": "Black USB, has a red rubber keychain loop"
+    }
+   ]
+  },
+  {
+   "kind": "clear phone case",
+   "objects": [
+    {
+     "lost": "Clear case, yellowed corners",
+     "found": "Clear plastic case, corners are significantly yellowed"
+    },
+    {
+     "lost": "Phone case",
+     "found": "Clear case, has a small crack on the back"
+    },
+    {
+     "lost": "Clear case with card slot",
+     "found": "Clear case, has a clear plastic card holder inside"
+    }
+   ]
+  },
+  {
+   "kind": "black umbrella",
+   "objects": [
+    {
+     "lost": "Black umbrella, broken rib",
+     "found": "Black umbrella, one internal rib is bent outward"
+    },
+    {
+     "lost": "Black umbrella",
+     "found": "Black umbrella, handle has a slight chip in paint"
+    },
+    {
+     "lost": "Black umbrella with tag",
+     "found": "Black umbrella, has a blue fabric tag on handle"
+    }
+   ]
+  },
+  {
+   "kind": "silver stainless steel thermos",
+   "objects": [
+    {
+     "lost": "Silver thermos, lid loose",
+     "found": "Silver metal thermos, lid does not screw on tight"
+    },
+    {
+     "lost": "Silver flask",
+     "found": "Silver thermos, has a small dent on the side"
+    },
+    {
+     "lost": "Silver thermos with sticker",
+     "found": "Silver thermos, has a university logo sticker on front"
+    }
+   ]
+  },
+  {
+   "kind": "black notebook",
+   "objects": [
+    {
+     "lost": "Black notebook, elastic band broken",
+     "found": "Black notebook, the black elastic closure band is snapped"
+    },
+    {
+     "lost": "Black notebook",
+     "found": "Black A5 notebook, has a pen loop on back"
+    },
+    {
+     "lost": "Black notebook with pen",
+     "found": "Black notebook, has a black pen clipped to the side"
+    }
+   ]
+  }
+ ],
  "lost": [
   {
-   "id": "l-03",
-   "description": "Silver Apple AirPods Pro with a black keychain attached to the left earbud and some dirt near the stem.",
-   "location": {
-    "name": "The Deck, Arts canteen",
-    "latitude": 1.2944,
-    "longitude": 103.7725
-   },
-   "eventTime": "2026-09-13T17:23:05+00:00",
-   "truth": "f-03",
-   "case": "typical"
-  },
-  {
-   "id": "l-11",
-   "description": "Silver Dell laptop charger with a frayed cable near the connector and a piece of tape holding it together.",
-   "location": {
-    "name": "University Sports Centre",
-    "latitude": 1.2996,
-    "longitude": 103.7756
-   },
-   "eventTime": "2026-09-10T13:19:52+00:00",
-   "truth": "f-11",
-   "case": "typical"
-  },
-  {
-   "id": "l-14",
-   "description": "Clear plastic water bottle with a blue lid, containing half a bottle of orange juice and a label with my name.",
-   "location": {
-    "name": "Engineering Block E1",
-    "latitude": 1.2988,
-    "longitude": 103.7711
-   },
-   "eventTime": "2026-09-07T15:26:51+00:00",
-   "truth": "f-14",
-   "case": "found_elsewhere"
-  },
-  {
-   "id": "l-17",
-   "description": "Red canvas tote bag with a printed quote about coffee and a small tear on the bottom right seam.",
-   "location": {
-    "name": "University Sports Centre",
-    "latitude": 1.2996,
-    "longitude": 103.7756
-   },
-   "eventTime": "2026-09-20T16:08:43+00:00",
-   "truth": "f-17",
-   "case": "found_late"
-  },
-  {
-   "id": "l-04",
-   "description": "Red Hydro Flask water bottle, 21oz size, with a white lid and a sticker of the NUS lion on the side.",
-   "location": {
-    "name": "NUS Central Library",
-    "latitude": 1.2966,
-    "longitude": 103.7723
-   },
-   "eventTime": "2026-09-11T18:43:23+00:00",
-   "truth": "f-04",
-   "case": "typical"
-  },
-  {
-   "id": "l-10",
-   "description": "Blue Nike backpack with a zipper pull that is missing, containing a laptop sleeve and a water bottle.",
-   "location": {
-    "name": "Engineering Block E1",
-    "latitude": 1.2988,
-    "longitude": 103.7711
-   },
-   "eventTime": "2026-09-10T08:18:26+00:00",
-   "truth": "f-10",
-   "case": "typical"
-  },
-  {
-   "id": "l-18",
-   "description": "White Fitbit Charge 4 with a grey band, showing a crack on the screen and a charging cable.",
-   "location": {
-    "name": "The Deck, Arts canteen",
-    "latitude": 1.2944,
-    "longitude": 103.7725
-   },
-   "eventTime": "2026-09-25T16:58:31+00:00",
-   "truth": "f-18",
-   "case": "found_late"
-  },
-  {
-   "id": "l-16",
-   "description": "Black mechanical keyboard with blue switches, missing the escape key cap and having dust between the keys.",
-   "location": {
-    "name": "Kent Ridge MRT",
-    "latitude": 1.2935,
-    "longitude": 103.7846
-   },
-   "eventTime": "2026-09-17T18:16:34+00:00",
-   "truth": "f-16",
-   "case": "found_elsewhere"
-  },
-  {
-   "id": "l-12",
-   "description": "Pink Kate Spade wallet with gold hardware, containing a membership card for the campus gym and some cash.",
-   "location": {
-    "name": "UTown Stephen Riady Centre",
-    "latitude": 1.3046,
-    "longitude": 103.7725
-   },
-   "eventTime": "2026-09-30T17:23:18+00:00",
-   "truth": "f-12",
-   "case": "typical"
-  },
-  {
-   "id": "l-n03",
-   "description": "Gold AirPods Max, silver headband, dirty ear cushions.",
-   "location": {
-    "name": "Kent Ridge Bus Terminal",
-    "latitude": 1.2946,
-    "longitude": 103.7696
-   },
-   "eventTime": "2026-09-21T19:14:35+00:00",
-   "truth": null
-  },
-  {
-   "id": "l-08",
-   "description": "Green Moleskine notebook with a pen clipped to the elastic band and handwritten notes on the first page.",
-   "location": {
-    "name": "Kent Ridge MRT",
-    "latitude": 1.2935,
-    "longitude": 103.7846
-   },
-   "eventTime": "2026-09-24T14:45:36+00:00",
-   "truth": "f-08",
-   "case": "typical"
-  },
-  {
-   "id": "l-n04",
-   "description": "Blue 21oz Hydro Flask with black lid and tiger sticker.",
-   "location": {
-    "name": "University Sports Centre",
-    "latitude": 1.2996,
-    "longitude": 103.7756
-   },
-   "eventTime": "2026-09-19T16:31:54+00:00",
-   "truth": null
-  },
-  {
-   "id": "l-01",
-   "description": "Black Samsung Galaxy S22 phone case with a cracked screen protector and a small scratch on the bottom left corner.",
-   "location": {
-    "name": "Kent Ridge Bus Terminal",
-    "latitude": 1.2946,
-    "longitude": 103.7696
-   },
-   "eventTime": "2026-09-20T11:49:06+00:00",
-   "truth": "f-01",
-   "case": "typical"
-  },
-  {
-   "id": "l-20",
-   "description": "Blue Samsung tablet with a cracked screen protector, inside a blue protective case with a stylus holder.",
-   "location": {
-    "name": "Kent Ridge Bus Terminal",
-    "latitude": 1.2946,
-    "longitude": 103.7696
-   },
-   "eventTime": "2026-09-10T14:45:05+00:00",
-   "truth": "f-20",
-   "case": "found_late"
-  },
-  {
-   "id": "l-13",
-   "description": "Black Sony WH-1000XM4 headphones with a scratch on the right ear cup cushion and a carrying pouch.",
-   "location": {
-    "name": "NUS Central Library",
-    "latitude": 1.2966,
-    "longitude": 103.7723
-   },
-   "eventTime": "2026-09-12T18:44:26+00:00",
-   "truth": "f-13",
-   "case": "found_elsewhere"
-  },
-  {
    "id": "l-06",
-   "description": "Yellow plastic umbrella with a broken handle, missing the plastic tip at the very top of the shaft.",
+   "group": 3,
+   "description": "Blue bottle",
    "location": {
     "name": "Kent Ridge MRT",
     "latitude": 1.2935,
     "longitude": 103.7846
    },
-   "eventTime": "2026-09-27T18:33:13+00:00",
+   "eventTime": "2026-09-15T17:00:12+00:00",
    "truth": "f-06",
    "case": "typical"
   },
   {
-   "id": "l-05",
-   "description": "Brown leather wallet with a torn edge, containing three credit cards and a faded photo of a dog.",
+   "id": "l-n04",
+   "description": "Black sleeve with mesh pocket",
+   "truth": null,
+   "group": 4,
+   "location": {
+    "name": "Kent Ridge MRT",
+    "latitude": 1.2935,
+    "longitude": 103.7846
+   },
+   "eventTime": "2026-09-12T13:53:13+00:00"
+  },
+  {
+   "id": "l-07",
+   "group": 4,
+   "description": "Black sleeve, zipper broken",
    "location": {
     "name": "Engineering Block E1",
     "latitude": 1.2988,
     "longitude": 103.7711
    },
-   "eventTime": "2026-09-22T16:04:44+00:00",
-   "truth": "f-05",
+   "eventTime": "2026-09-14T17:12:37+00:00",
+   "truth": "f-07",
    "case": "typical"
   },
   {
-   "id": "l-15",
-   "description": "Brown leather passport holder with a stamp from Japan and a photo of the Eiffel Tower inside the window.",
+   "id": "l-01",
+   "group": 1,
+   "description": "Black wallet, missing ID card slot",
+   "location": {
+    "name": "Kent Ridge Bus Terminal",
+    "latitude": 1.2946,
+    "longitude": 103.7696
+   },
+   "eventTime": "2026-09-20T11:51:49+00:00",
+   "truth": "f-01",
+   "case": "typical"
+  },
+  {
+   "id": "l-17",
+   "group": 9,
+   "description": "Silver thermos, lid loose",
+   "location": {
+    "name": "Kent Ridge Bus Terminal",
+    "latitude": 1.2946,
+    "longitude": 103.7696
+   },
+   "eventTime": "2026-09-25T10:51:51+00:00",
+   "truth": "f-17",
+   "case": "typical"
+  },
+  {
+   "id": "l-n01",
+   "description": "Black leather wallet with a gold clasp",
+   "truth": null,
+   "group": 1,
+   "location": {
+    "name": "Kent Ridge Bus Terminal",
+    "latitude": 1.2946,
+    "longitude": 103.7696
+   },
+   "eventTime": "2026-09-18T11:13:58+00:00"
+  },
+  {
+   "id": "l-08",
+   "group": 4,
+   "description": "Black laptop bag",
+   "location": {
+    "name": "Kent Ridge MRT",
+    "latitude": 1.2935,
+    "longitude": 103.7846
+   },
+   "eventTime": "2026-09-14T14:21:50+00:00",
+   "truth": "f-08",
+   "case": "typical"
+  },
+  {
+   "id": "l-09",
+   "group": 5,
+   "description": "Grey hoodie, drawstring missing",
    "location": {
     "name": "UTown Stephen Riady Centre",
     "latitude": 1.3046,
     "longitude": 103.7725
    },
-   "eventTime": "2026-09-23T18:40:55+00:00",
-   "truth": "f-15",
+   "eventTime": "2026-09-10T16:47:05+00:00",
+   "truth": "f-09",
    "case": "found_elsewhere"
   },
   {
-   "id": "l-n01",
-   "description": "Orange Samsung phone case with a visible crack on the back cover.",
-   "location": {
-    "name": "Kent Ridge MRT",
-    "latitude": 1.2935,
-    "longitude": 103.7846
-   },
-   "eventTime": "2026-09-28T17:52:01+00:00",
-   "truth": null
-  },
-  {
-   "id": "l-n02",
-   "description": "Green card holder containing a student ID and library card inside.",
+   "id": "l-05",
+   "group": 3,
+   "description": "Blue Hydro Flask, dent on bottom",
    "location": {
     "name": "Kent Ridge Bus Terminal",
     "latitude": 1.2946,
     "longitude": 103.7696
    },
-   "eventTime": "2026-09-27T16:04:08+00:00",
-   "truth": null
-  },
-  {
-   "id": "l-02",
-   "description": "Blue NUS library card holder containing my student ID and a library card from the Main Library.",
-   "location": {
-    "name": "Kent Ridge MRT",
-    "latitude": 1.2935,
-    "longitude": 103.7846
-   },
-   "eventTime": "2026-09-27T19:44:22+00:00",
-   "truth": "f-02",
+   "eventTime": "2026-09-15T15:28:47+00:00",
+   "truth": "f-05",
    "case": "typical"
   },
   {
-   "id": "l-07",
-   "description": "White Nintendo Switch console in a grey carrying case, with Joy-Cons showing minor wear on the analog sticks.",
+   "id": "l-12",
+   "group": 6,
+   "description": "Black drive",
    "location": {
-    "name": "Kent Ridge MRT",
-    "latitude": 1.2935,
-    "longitude": 103.7846
+    "name": "UTown Stephen Riady Centre",
+    "latitude": 1.3046,
+    "longitude": 103.7725
    },
-   "eventTime": "2026-09-24T18:51:16+00:00",
-   "truth": "f-07",
-   "case": "typical"
+   "eventTime": "2026-10-02T19:08:58+00:00",
+   "truth": "f-12",
+   "case": "found_late"
   },
   {
-   "id": "l-19",
-   "description": "Black leather belt with a silver buckle, containing a small hole near the second hole from the end.",
+   "id": "l-20",
+   "group": 10,
+   "description": "Black notebook",
    "location": {
     "name": "COM1, School of Computing",
     "latitude": 1.295,
     "longitude": 103.7737
    },
-   "eventTime": "2026-09-21T08:02:20+00:00",
-   "truth": "f-19",
-   "case": "found_late"
-  },
-  {
-   "id": "l-09",
-   "description": "Black Ray-Ban sunglasses with a small dent on the left temple arm and a microfiber cloth in the case.",
-   "location": {
-    "name": "Kent Ridge Bus Terminal",
-    "latitude": 1.2946,
-    "longitude": 103.7696
-   },
-   "eventTime": "2026-09-25T15:15:37+00:00",
-   "truth": "f-09",
+   "eventTime": "2026-09-11T15:34:34+00:00",
+   "truth": "f-20",
    "case": "typical"
   },
   {
-   "id": "l-n05",
-   "description": "Tan leather wallet, clean edge, contains credit cards and photo.",
-   "location": {
-    "name": "Kent Ridge Bus Terminal",
-    "latitude": 1.2946,
-    "longitude": 103.7696
-   },
-   "eventTime": "2026-09-25T10:29:08+00:00",
-   "truth": null
-  }
- ],
- "found": [
-  {
-   "id": "f-08",
-   "description": "Green Moleskine notebook, pen clipped to band, notes on first page.",
+   "id": "l-16",
+   "group": 8,
+   "description": "Black umbrella",
    "location": {
     "name": "Kent Ridge MRT",
     "latitude": 1.2935,
     "longitude": 103.7846
    },
-   "eventTime": "2026-09-24T20:18:36+00:00"
+   "eventTime": "2026-09-09T14:55:33+00:00",
+   "truth": "f-16",
+   "case": "typical"
   },
   {
-   "id": "f-09",
-   "description": "Black Ray-Bans, dent on left temple, cloth in case.",
+   "id": "l-19",
+   "group": 10,
+   "description": "Black notebook, elastic band broken",
    "location": {
-    "name": "Kent Ridge Bus Terminal",
-    "latitude": 1.2946,
-    "longitude": 103.7696
+    "name": "COM1, School of Computing",
+    "latitude": 1.295,
+    "longitude": 103.7737
    },
-   "eventTime": "2026-09-25T20:54:13+00:00"
+   "eventTime": "2026-09-11T15:51:33+00:00",
+   "truth": "f-19",
+   "case": "found_late"
   },
   {
-   "id": "f-03",
-   "description": "Silver AirPods Pro, black keychain on left earbud, dirty stem.",
+   "id": "l-18",
+   "group": 9,
+   "description": "Silver flask",
    "location": {
     "name": "The Deck, Arts canteen",
     "latitude": 1.2944,
     "longitude": 103.7725
    },
-   "eventTime": "2026-09-13T23:34:31+00:00"
+   "eventTime": "2026-09-25T11:26:38+00:00",
+   "truth": "f-18",
+   "case": "found_elsewhere"
   },
   {
-   "id": "f-d02",
-   "description": "Blue university ID badge holder with a lanyard and student photo inside.",
+   "id": "l-n03",
+   "description": "Blue Hydro Flask with name tag",
+   "truth": null,
+   "group": 3,
+   "location": {
+    "name": "Kent Ridge Bus Terminal",
+    "latitude": 1.2946,
+    "longitude": 103.7696
+   },
+   "eventTime": "2026-09-15T16:26:12+00:00"
+  },
+  {
+   "id": "l-03",
+   "group": 2,
+   "description": "White AirPods case, sticker on back",
+   "location": {
+    "name": "Kent Ridge MRT",
+    "latitude": 1.2935,
+    "longitude": 103.7846
+   },
+   "eventTime": "2026-09-01T12:02:32+00:00",
+   "truth": "f-03",
+   "case": "found_late"
+  },
+  {
+   "id": "l-11",
+   "group": 6,
+   "description": "Black USB, label peeling",
+   "location": {
+    "name": "UTown Stephen Riady Centre",
+    "latitude": 1.3046,
+    "longitude": 103.7725
+   },
+   "eventTime": "2026-09-23T17:00:41+00:00",
+   "truth": "f-11",
+   "case": "typical"
+  },
+  {
+   "id": "l-13",
+   "group": 7,
+   "description": "Clear case, yellowed corners",
+   "location": {
+    "name": "The Deck, Arts canteen",
+    "latitude": 1.2944,
+    "longitude": 103.7725
+   },
+   "eventTime": "2026-09-25T15:43:53+00:00",
+   "truth": "f-13",
+   "case": "typical"
+  },
+  {
+   "id": "l-02",
+   "group": 1,
+   "description": "Black wallet",
+   "location": {
+    "name": "University Sports Centre",
+    "latitude": 1.2996,
+    "longitude": 103.7756
+   },
+   "eventTime": "2026-09-20T11:33:10+00:00",
+   "truth": "f-02",
+   "case": "found_elsewhere"
+  },
+  {
+   "id": "l-10",
+   "group": 5,
+   "description": "Grey hoodie",
+   "location": {
+    "name": "UTown Stephen Riady Centre",
+    "latitude": 1.3046,
+    "longitude": 103.7725
+   },
+   "eventTime": "2026-09-17T19:09:19+00:00",
+   "truth": "f-10",
+   "case": "typical"
+  },
+  {
+   "id": "l-n02",
+   "description": "White AirPods case, keychain attached",
+   "truth": null,
+   "group": 2,
    "location": {
     "name": "COM1, School of Computing",
     "latitude": 1.295,
     "longitude": 103.7737
    },
-   "eventTime": "2026-09-08T14:39:58+00:00"
+   "eventTime": "2026-09-03T12:59:13+00:00"
+  },
+  {
+   "id": "l-04",
+   "group": 2,
+   "description": "White case",
+   "location": {
+    "name": "UTown Stephen Riady Centre",
+    "latitude": 1.3046,
+    "longitude": 103.7725
+   },
+   "eventTime": "2026-09-01T14:15:58+00:00",
+   "truth": "f-04",
+   "case": "typical"
+  },
+  {
+   "id": "l-n05",
+   "description": "Grey hoodie with pen in pocket",
+   "truth": null,
+   "group": 5,
+   "location": {
+    "name": "UTown Stephen Riady Centre",
+    "latitude": 1.3046,
+    "longitude": 103.7725
+   },
+   "eventTime": "2026-09-11T14:48:49+00:00"
+  },
+  {
+   "id": "l-15",
+   "group": 8,
+   "description": "Black umbrella, broken rib",
+   "location": {
+    "name": "Kent Ridge MRT",
+    "latitude": 1.2935,
+    "longitude": 103.7846
+   },
+   "eventTime": "2026-09-01T13:01:48+00:00",
+   "truth": "f-15",
+   "case": "typical"
+  },
+  {
+   "id": "l-14",
+   "group": 7,
+   "description": "Phone case",
+   "location": {
+    "name": "The Deck, Arts canteen",
+    "latitude": 1.2944,
+    "longitude": 103.7725
+   },
+   "eventTime": "2026-09-30T16:38:26+00:00",
+   "truth": "f-14",
+   "case": "typical"
+  }
+ ],
+ "found": [
+  {
+   "id": "f-06",
+   "group": 3,
+   "description": "Blue insulated bottle, cap is slightly loose",
+   "location": {
+    "name": "Kent Ridge MRT",
+    "latitude": 1.2935,
+    "longitude": 103.7846
+   },
+   "eventTime": "2026-09-16T00:12:01+00:00"
+  },
+  {
+   "id": "f-08",
+   "group": 4,
+   "description": "Black sleeve, has a small coffee stain on front",
+   "location": {
+    "name": "Kent Ridge MRT",
+    "latitude": 1.2935,
+    "longitude": 103.7846
+   },
+   "eventTime": "2026-09-14T18:42:00+00:00"
+  },
+  {
+   "id": "f-15",
+   "group": 8,
+   "description": "Black umbrella, one internal rib is bent outward",
+   "location": {
+    "name": "Kent Ridge MRT",
+    "latitude": 1.2935,
+    "longitude": 103.7846
+   },
+   "eventTime": "2026-09-01T23:52:43+00:00"
+  },
+  {
+   "id": "f-d04",
+   "description": "Silver thermos, has a university logo sticker on front",
+   "group": 9,
+   "location": {
+    "name": "Kent Ridge Bus Terminal",
+    "latitude": 1.2946,
+    "longitude": 103.7696
+   },
+   "eventTime": "2026-09-23T10:49:53+00:00"
+  },
+  {
+   "id": "f-14",
+   "group": 7,
+   "description": "Clear case, has a small crack on the back",
+   "location": {
+    "name": "The Deck, Arts canteen",
+    "latitude": 1.2944,
+    "longitude": 103.7725
+   },
+   "eventTime": "2026-10-01T01:24:40+00:00"
+  },
+  {
+   "id": "f-10",
+   "group": 5,
+   "description": "Grey cotton hoodie, faded logo on chest",
+   "location": {
+    "name": "UTown Stephen Riady Centre",
+    "latitude": 1.3046,
+    "longitude": 103.7725
+   },
+   "eventTime": "2026-09-17T23:47:32+00:00"
+  },
+  {
+   "id": "f-d01",
+   "description": "Black USB, has a red rubber keychain loop",
+   "group": 6,
+   "location": {
+    "name": "Kent Ridge MRT",
+    "latitude": 1.2935,
+    "longitude": 103.7846
+   },
+   "eventTime": "2026-09-16T17:31:29+00:00"
+  },
+  {
+   "id": "f-02",
+   "group": 1,
+   "description": "Bifold wallet, slightly worn edges, no visible brand",
+   "location": {
+    "name": "Kent Ridge MRT",
+    "latitude": 1.2935,
+    "longitude": 103.7846
+   },
+   "eventTime": "2026-09-20T21:08:38+00:00"
+  },
+  {
+   "id": "f-05",
+   "group": 3,
+   "description": "Blue metal bottle, noticeable dent near the base",
+   "location": {
+    "name": "Kent Ridge Bus Terminal",
+    "latitude": 1.2946,
+    "longitude": 103.7696
+   },
+   "eventTime": "2026-09-15T21:49:40+00:00"
+  },
+  {
+   "id": "f-16",
+   "group": 8,
+   "description": "Black umbrella, handle has a slight chip in paint",
+   "location": {
+    "name": "Kent Ridge MRT",
+    "latitude": 1.2935,
+    "longitude": 103.7846
+   },
+   "eventTime": "2026-09-09T20:06:50+00:00"
+  },
+  {
+   "id": "f-d02",
+   "description": "Clear case, has a clear plastic card holder inside",
+   "group": 7,
+   "location": {
+    "name": "The Deck, Arts canteen",
+    "latitude": 1.2944,
+    "longitude": 103.7725
+   },
+   "eventTime": "2026-09-25T14:32:28+00:00"
+  },
+  {
+   "id": "f-20",
+   "group": 10,
+   "description": "Black A5 notebook, has a pen loop on back",
+   "location": {
+    "name": "COM1, School of Computing",
+    "latitude": 1.295,
+    "longitude": 103.7737
+   },
+   "eventTime": "2026-09-11T23:04:18+00:00"
+  },
+  {
+   "id": "f-07",
+   "group": 4,
+   "description": "Black neoprene sleeve, zipper is stuck halfway",
+   "location": {
+    "name": "Engineering Block E1",
+    "latitude": 1.2988,
+    "longitude": 103.7711
+   },
+   "eventTime": "2026-09-15T02:52:56+00:00"
+  },
+  {
+   "id": "f-d03",
+   "description": "Black umbrella, has a blue fabric tag on handle",
+   "group": 8,
+   "location": {
+    "name": "University Sports Centre",
+    "latitude": 1.2996,
+    "longitude": 103.7756
+   },
+   "eventTime": "2026-09-19T15:23:55+00:00"
+  },
+  {
+   "id": "f-18",
+   "group": 9,
+   "description": "Silver thermos, has a small dent on the side",
+   "location": {
+    "name": "Engineering Block E1",
+    "latitude": 1.2988,
+    "longitude": 103.7711
+   },
+   "eventTime": "2026-09-25T15:07:12+00:00"
   },
   {
    "id": "f-04",
-   "description": "Red 21oz Hydro Flask with white lid and lion sticker.",
+   "group": 2,
+   "description": "AirPods case, clean, no accessories attached",
+   "location": {
+    "name": "UTown Stephen Riady Centre",
+    "latitude": 1.3046,
+    "longitude": 103.7725
+   },
+   "eventTime": "2026-09-02T01:47:34+00:00"
+  },
+  {
+   "id": "f-09",
+   "group": 5,
+   "description": "Grey hoodie, one drawstring is completely gone",
+   "location": {
+    "name": "Engineering Block E1",
+    "latitude": 1.2988,
+    "longitude": 103.7711
+   },
+   "eventTime": "2026-09-10T21:50:42+00:00"
+  },
+  {
+   "id": "f-d05",
+   "description": "Black notebook, has a black pen clipped to the side",
+   "group": 10,
    "location": {
     "name": "NUS Central Library",
     "latitude": 1.2966,
     "longitude": 103.7723
    },
-   "eventTime": "2026-09-11T23:11:43+00:00"
-  },
-  {
-   "id": "f-18",
-   "description": "White Fitbit Charge 4, grey band, cracked screen, cable.",
-   "location": {
-    "name": "The Deck, Arts canteen",
-    "latitude": 1.2944,
-    "longitude": 103.7725
-   },
-   "eventTime": "2026-10-02T04:16:04+00:00"
-  },
-  {
-   "id": "f-10",
-   "description": "Blue Nike backpack, missing zipper pull, contains laptop sleeve.",
-   "location": {
-    "name": "Engineering Block E1",
-    "latitude": 1.2988,
-    "longitude": 103.7711
-   },
-   "eventTime": "2026-09-10T17:58:44+00:00"
-  },
-  {
-   "id": "f-15",
-   "description": "Brown passport holder, Japan stamp, Eiffel Tower photo inside.",
-   "location": {
-    "name": "Kent Ridge MRT",
-    "latitude": 1.2935,
-    "longitude": 103.7846
-   },
-   "eventTime": "2026-09-24T04:07:36+00:00"
-  },
-  {
-   "id": "f-05",
-   "description": "Brown leather wallet, torn edge, contains credit cards and photo.",
-   "location": {
-    "name": "Engineering Block E1",
-    "latitude": 1.2988,
-    "longitude": 103.7711
-   },
-   "eventTime": "2026-09-22T17:59:19+00:00"
-  },
-  {
-   "id": "f-13",
-   "description": "Black Sony headphones, scratch on right cushion, pouch included.",
-   "location": {
-    "name": "The Deck, Arts canteen",
-    "latitude": 1.2944,
-    "longitude": 103.7725
-   },
-   "eventTime": "2026-09-13T04:47:34+00:00"
-  },
-  {
-   "id": "f-16",
-   "description": "Black mechanical keyboard, blue switches, missing escape key, dusty.",
-   "location": {
-    "name": "COM1, School of Computing",
-    "latitude": 1.295,
-    "longitude": 103.7737
-   },
-   "eventTime": "2026-09-17T22:58:05+00:00"
-  },
-  {
-   "id": "f-20",
-   "description": "Blue Samsung tablet, cracked protector, blue case, stylus holder.",
-   "location": {
-    "name": "Kent Ridge Bus Terminal",
-    "latitude": 1.2946,
-    "longitude": 103.7696
-   },
-   "eventTime": "2026-09-12T15:02:27+00:00"
-  },
-  {
-   "id": "f-06",
-   "description": "Yellow umbrella with broken handle and missing top plastic tip.",
-   "location": {
-    "name": "Kent Ridge MRT",
-    "latitude": 1.2935,
-    "longitude": 103.7846
-   },
-   "eventTime": "2026-09-28T04:37:00+00:00"
-  },
-  {
-   "id": "f-d05",
-   "description": "Brown canvas messenger bag with a broken zipper pull and metal buckles.",
-   "location": {
-    "name": "Engineering Block E1",
-    "latitude": 1.2988,
-    "longitude": 103.7711
-   },
-   "eventTime": "2026-09-15T17:27:20+00:00"
-  },
-  {
-   "id": "f-02",
-   "description": "Blue card holder with student ID and library card inside.",
-   "location": {
-    "name": "Kent Ridge MRT",
-    "latitude": 1.2935,
-    "longitude": 103.7846
-   },
-   "eventTime": "2026-09-28T05:19:50+00:00"
-  },
-  {
-   "id": "f-12",
-   "description": "Pink Kate Spade wallet, gold hardware, gym card inside.",
-   "location": {
-    "name": "UTown Stephen Riady Centre",
-    "latitude": 1.3046,
-    "longitude": 103.7725
-   },
-   "eventTime": "2026-10-01T03:54:12+00:00"
-  },
-  {
-   "id": "f-14",
-   "description": "Clear bottle, blue lid, half orange juice, name label.",
-   "location": {
-    "name": "COM1, School of Computing",
-    "latitude": 1.295,
-    "longitude": 103.7737
-   },
-   "eventTime": "2026-09-08T01:21:40+00:00"
-  },
-  {
-   "id": "f-11",
-   "description": "Silver Dell charger, frayed cable near connector, tape holding it.",
-   "location": {
-    "name": "University Sports Centre",
-    "latitude": 1.2996,
-    "longitude": 103.7756
-   },
-   "eventTime": "2026-09-10T20:18:15+00:00"
-  },
-  {
-   "id": "f-07",
-   "description": "White Switch console in grey case, worn analog sticks.",
-   "location": {
-    "name": "Kent Ridge MRT",
-    "latitude": 1.2935,
-    "longitude": 103.7846
-   },
-   "eventTime": "2026-09-25T04:08:53+00:00"
-  },
-  {
-   "id": "f-d01",
-   "description": "Red iPhone 14 case with a cracked back glass and camera lens scratches.",
-   "location": {
-    "name": "Kent Ridge MRT",
-    "latitude": 1.2935,
-    "longitude": 103.7846
-   },
-   "eventTime": "2026-09-20T14:32:42+00:00"
-  },
-  {
-   "id": "f-01",
-   "description": "Black phone case for Samsung Galaxy, cracked screen protector visible.",
-   "location": {
-    "name": "Kent Ridge Bus Terminal",
-    "latitude": 1.2946,
-    "longitude": 103.7696
-   },
-   "eventTime": "2026-09-20T22:53:53+00:00"
-  },
-  {
-   "id": "f-d04",
-   "description": "Yellow reusable water bottle with a green lid and a faded logo.",
-   "location": {
-    "name": "COM1, School of Computing",
-    "latitude": 1.295,
-    "longitude": 103.7737
-   },
-   "eventTime": "2026-09-11T17:08:44+00:00"
-  },
-  {
-   "id": "f-19",
-   "description": "Black leather belt, silver buckle, hole near second position.",
-   "location": {
-    "name": "COM1, School of Computing",
-    "latitude": 1.295,
-    "longitude": 103.7737
-   },
-   "eventTime": "2026-09-27T17:04:39+00:00"
-  },
-  {
-   "id": "f-d03",
-   "description": "Black Sony noise-canceling headphones with a cracked headband cushion and carrying pouch.",
-   "location": {
-    "name": "UTown Stephen Riady Centre",
-    "latitude": 1.3046,
-    "longitude": 103.7725
-   },
-   "eventTime": "2026-09-16T19:01:26+00:00"
+   "eventTime": "2026-09-07T15:36:52+00:00"
   },
   {
    "id": "f-17",
-   "description": "Red canvas tote, coffee quote, tear on bottom right seam.",
+   "group": 9,
+   "description": "Silver metal thermos, lid does not screw on tight",
    "location": {
-    "name": "University Sports Centre",
-    "latitude": 1.2996,
-    "longitude": 103.7756
+    "name": "Kent Ridge Bus Terminal",
+    "latitude": 1.2946,
+    "longitude": 103.7696
    },
-   "eventTime": "2026-09-25T03:59:03+00:00"
+   "eventTime": "2026-09-25T16:01:00+00:00"
+  },
+  {
+   "id": "f-01",
+   "group": 1,
+   "description": "Black leather wallet with a scratch on the corner",
+   "location": {
+    "name": "Kent Ridge Bus Terminal",
+    "latitude": 1.2946,
+    "longitude": 103.7696
+   },
+   "eventTime": "2026-09-20T23:37:30+00:00"
+  },
+  {
+   "id": "f-19",
+   "group": 10,
+   "description": "Black notebook, the black elastic closure band is snapped",
+   "location": {
+    "name": "COM1, School of Computing",
+    "latitude": 1.295,
+    "longitude": 103.7737
+   },
+   "eventTime": "2026-09-17T10:11:21+00:00"
+  },
+  {
+   "id": "f-03",
+   "group": 2,
+   "description": "White charging case with a faded anime sticker",
+   "location": {
+    "name": "Kent Ridge MRT",
+    "latitude": 1.2935,
+    "longitude": 103.7846
+   },
+   "eventTime": "2026-09-06T21:38:16+00:00"
+  },
+  {
+   "id": "f-12",
+   "group": 6,
+   "description": "Black USB drive, no visible branding or labels",
+   "location": {
+    "name": "UTown Stephen Riady Centre",
+    "latitude": 1.3046,
+    "longitude": 103.7725
+   },
+   "eventTime": "2026-10-07T20:48:21+00:00"
+  },
+  {
+   "id": "f-13",
+   "group": 7,
+   "description": "Clear plastic case, corners are significantly yellowed",
+   "location": {
+    "name": "The Deck, Arts canteen",
+    "latitude": 1.2944,
+    "longitude": 103.7725
+   },
+   "eventTime": "2026-09-25T19:54:17+00:00"
+  },
+  {
+   "id": "f-11",
+   "group": 6,
+   "description": "Black USB stick, paper label is curling up",
+   "location": {
+    "name": "UTown Stephen Riady Centre",
+    "latitude": 1.3046,
+    "longitude": 103.7725
+   },
+   "eventTime": "2026-09-23T19:47:13+00:00"
   }
  ]
 }

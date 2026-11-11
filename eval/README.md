@@ -7,27 +7,39 @@ location, 0.15 time) with the other components switched off; the scorer divides 
 weights it uses, so they are renormalized. Production code and its 0.7 default threshold are
 not changed.
 
-For every configuration and threshold (0.40 to 0.95 in steps of 0.05) it reports:
+Over the lost reports that have a true match, using the complete ranked list of candidates
+(so these do not depend on the threshold):
 
-- **Hit@1, Recall@5, MRR** over lost reports that have a true match. The worker only stores
-  matches at or above the threshold, so a true match below it counts as not found.
-- **Alert precision**: share of alerts (scores at or above the threshold) that are the true match.
-- **True-match recall**: share of true matches that alert.
+- **Hit@1**: the true match is ranked first. **Recall@5**: it is in the top five.
+  **MRR**: mean of 1 / rank of the true match.
+
+At each threshold from 0.40 to 0.95 (steps of 0.05), where every candidate scoring at or
+above the threshold is an alert:
+
+- **Alert precision**: share of alerts that are the true match.
+- **True-match notification recall** (`true_match_recall`): share of true matches that alert.
 - **Incorrect alerts**: number of alerts that are not the true match.
 - **False-alert rate**: share of lost reports with no true match that still get an alert.
 
 ## Dataset
 
-`data/sample_dataset_qwen.json`: 25 lost reports and 25 found items. 20 lost reports have one
-true found item, 5 lost reports have no match, and 5 found items match nothing; several of the
-unmatched items are close variants of real ones (another colour, brand or mark). Every
-description was written by Qwen 3.6 35B on NUS SoClaaS; the prompts and every call are saved in
-the file's `meta`. Places are real NUS locations and times are in September 2026:
+`data/sample_dataset_qwen.json`: 25 lost and 25 found reports, built from 10 groups of three
+look-alike objects (same kind and colour, often the same brand, such as three black wallets).
+Qwen 3.6 35B on NUS SoClaaS wrote every description; owners' reports range from two words
+("Black wallet") to a short sentence, and staff describe objects in their own words. The prompt,
+the call and the model's output (`groups`) are saved in the file.
 
-- 12 true pairs are found where they were lost, 1 to 12 hours later;
-- 4 are found at another NUS place, 1 to 12 hours later (location works against these);
-- 4 are found at the same place 2 to 7 days later (time works against these);
-- unmatched items get a random place and day.
+In each group two objects are true pairs and the third is a lost report nobody found
+(groups 1-5) or a found item nobody reported (groups 6-10), so every lost report competes with
+look-alikes. Places are real NUS locations and times are in September 2026, set by fixed rules
+(`PLACEMENT` in `generate_sample.py`, also saved in the file):
+
+- groups 1-4: the two pairs are lost on the same day at places at least 800 m apart, so
+  location can tell them apart;
+- groups 5-8: lost within 400 m of each other, 5 to 10 days apart, so time can tell them apart;
+- groups 9-10: lost within 400 m of each other on the same day, so neither can;
+- 14 pairs are found where they were lost, 1-12 h later; 3 are found at another place and 3 are
+  found 2-7 days later, so location or time can also work against the true match.
 
 `data/sample_dataset.json` is the original hand-made 4 x 4 smoke test used by the unit tests.
 

@@ -25,6 +25,8 @@ LABELS = {"text_only": "Text only", "text_location": "Text + location",
 # Categorical colours in fixed order, plus a marker shape each so lines are not told apart by colour alone.
 STYLE = {"text_only": ("#2a78d6", "o"), "text_location": ("#eb6834", "s"),
          "text_time": ("#1baf7a", "^"), "text_location_time": ("#eda100", "D")}
+# Thresholds annotated on the text + location + time line: label offset (points) and alignment.
+LABELLED = {0.7: (14, 22, "left"), 0.8: (16, 10, "left"), 0.9: (-14, 12, "right")}
 
 
 def plot(reports: list, subtitle: str, path: str) -> None:
@@ -41,20 +43,21 @@ def plot(reports: list, subtitle: str, path: str) -> None:
         ax.plot([r.true_match_recall for r in rows], [r.alert_precision for r in rows], color=colour,
                 linewidth=1.6, marker=marker, markersize=6, markeredgecolor=surface, markeredgewidth=1.0,
                 label=LABELS[variant], zorder=3)
-        if variant == "text_location_time":  # label thresholds on one line only, to keep it readable
+        if variant == "text_location_time":  # a few thresholds on one line only, to keep it readable
             for r in rows:
-                if r.threshold >= 0.7:
-                    dx, dy, ha = (5, -11, "left") if r.threshold in (0.75, 0.8, 0.85) else (-7, 5, "right")
+                if r.threshold in LABELLED:
+                    dx, dy, ha = LABELLED[r.threshold]
                     ax.annotate(f"{r.threshold:.2f}", (r.true_match_recall, r.alert_precision), xytext=(dx, dy),
-                                textcoords="offset points", ha=ha, fontsize=7.5, color=muted)
+                                textcoords="offset points", ha=ha, va="center", fontsize=7.5, color=muted,
+                                arrowprops={"arrowstyle": "-", "color": muted, "linewidth": 0.6, "shrinkB": 4})
     lowest = min(r.true_match_recall for r in reports)
     ax.set_xlim(max(0.0, round(lowest - 0.1, 1)), 1.03)
     ax.set_ylim(-0.02, 1.08)
-    ax.set_xlabel("True-match recall (share of true matches that alert)", color=muted, fontsize=9)
-    ax.set_ylabel("Alert precision (share of alerts that are the true match)", color=muted, fontsize=9)
-    ax.text(0, 1.115, "Alert precision vs true-match recall", transform=ax.transAxes, color=ink, fontsize=11,
-            va="bottom")
-    ax.text(0, 1.025, subtitle, transform=ax.transAxes, color=muted, fontsize=8, va="bottom", linespacing=1.5)
+    ax.set_xlabel("True-match notification recall", color=muted, fontsize=9)
+    ax.set_ylabel("Alert precision", color=muted, fontsize=9)
+    ax.text(0, 1.075, "Alert precision vs true-match notification recall", transform=ax.transAxes, color=ink,
+            fontsize=11, va="bottom")
+    ax.text(0, 1.025, subtitle, transform=ax.transAxes, color=muted, fontsize=8, va="bottom")
     ax.grid(color=grid, linewidth=0.6, zorder=0)
     ax.tick_params(colors=muted, labelsize=8, length=0)
     for side in ("top", "right"):
@@ -94,9 +97,8 @@ def main():
         for r in reports:
             w.writerow([getattr(r, c) for c in COLS])
     n_lost, n_found = len(dataset["lost"]), len(dataset["found"])
-    plot(reports, f"{n_lost} lost / {n_found} found; one point per threshold from {min(thresholds):.2f} to "
-                  f"{max(thresholds):.2f}.\nA higher threshold moves a line up and left. "
-                  f"Numbers: thresholds on the text + location + time line.",
+    plot(reports, f"{n_lost} lost / {n_found} found; one point per threshold, {min(thresholds):.2f} to "
+                  f"{max(thresholds):.2f}. Labels: thresholds on Text + location + time.",
          os.path.join(out_dir, "precision_recall.png"))
     print(f"\nWrote {out_dir}/metrics.csv and precision_recall.png")
 

@@ -56,9 +56,10 @@ def test_geographic_ranking_uses_coordinates_and_explicit_radius():
     assert rank_variant(ds, VARIANTS["text_location"])[0].ranked == ["near"]
 
 
-def test_true_match_below_threshold_counts_as_not_found():
-    # The worker only stores matches at or above the threshold, so ranking metrics skip the rest.
+def test_ranking_metrics_ignore_threshold_but_alert_metrics_do_not():
+    # Hit@1, Recall@5 and MRR rank every candidate; only the alert metrics use the threshold.
     ds = load_dataset(SAMPLE)
-    text_only = {r.threshold: r for t in (0.7, 0.999) for r in evaluate(ds, threshold=t) if r.variant == "text_only"}
-    assert text_only[0.7].hit_at_1 == 1.0
-    assert text_only[0.999].hit_at_1 == text_only[0.999].recall_at_5 == text_only[0.999].mrr == 0.0
+    low, high = (next(r for r in evaluate(ds, threshold=t) if r.variant == "text_only") for t in (0.7, 0.999))
+    assert (low.hit_at_1, low.recall_at_5, low.mrr) == (high.hit_at_1, high.recall_at_5, high.mrr) == (1.0, 1.0, 1.0)
+    assert low.true_match_recall == 1.0
+    assert high.true_match_recall == 0.0 and high.alert_precision == 0.0

@@ -95,21 +95,19 @@ class VariantReport:
 def evaluate(dataset: dict, threshold: float = 0.7) -> list[VariantReport]:
     """Metrics per variant at one threshold.
 
-    The worker only stores matches scoring at or above the threshold, so Hit@1, Recall@5 and
-    MRR rank only those: a true match below the threshold counts as not found.
+    Hit@1, Recall@5 and MRR use the complete ranked candidate list, so they do not depend on
+    the threshold. The alert metrics do: every candidate scoring at or above it is an alert.
     """
     reports = []
     for name, weights in VARIANTS.items():
         queries = rank_variant(dataset, weights)
-        shown = [RankedQuery(q.query_id, [c for c, s in zip(q.ranked, q.scores) if s >= threshold],
-                             [s for s in q.scores if s >= threshold], q.truth) for q in queries]
         nm = notification_metrics(queries, threshold)
         reports.append(VariantReport(
             variant=name,
             threshold=threshold,
-            hit_at_1=round(hit_at_1(shown), 4),
-            recall_at_5=round(recall_at_k(shown, 5), 4),
-            mrr=round(mrr(shown), 4),
+            hit_at_1=round(hit_at_1(queries), 4),
+            recall_at_5=round(recall_at_k(queries, 5), 4),
+            mrr=round(mrr(queries), 4),
             alert_precision=round(nm.alert_precision, 4),
             true_match_recall=round(1 - nm.missed_notification_rate, 4),
             incorrect_alerts=nm.incorrect_alerts,
