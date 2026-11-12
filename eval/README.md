@@ -53,8 +53,14 @@ python3 run_eval.py data/generated/sample_dataset_qwen.json
 python3 -m pytest -q                # offline tests
 ```
 
-`run_eval.py` writes `output/metrics.csv` (every configuration and threshold) and
-`output/precision_recall.png`. Embeddings are cached in `data/generated/embeddings_bge-m3.json`,
+`run_eval.py` writes `output/metrics.csv` (every configuration and threshold) and three figures:
+
+- `output/precision_recall.png`: alert precision against true-match notification recall, one
+  point per threshold;
+- `output/metrics_by_threshold.png`: alert precision and false-alert rate against the threshold;
+- `output/ranking.png`: Hit@1, Recall@5 and MRR for each configuration.
+
+Embeddings are cached in `data/generated/embeddings_bge-m3.json`,
 so re-running `generate_sample.py` only calls the API for new text. To write new
 descriptions, delete `data/sample_dataset_qwen.json` and run it again; the LLM gives different
 text each time.
