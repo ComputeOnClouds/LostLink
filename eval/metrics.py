@@ -66,6 +66,7 @@ class NotificationMetrics:
     missed_notification_rate: float # of true-match queries, fraction with no correct alert
     alert_burden: float             # mean incorrect alerts per query
     alerts_total: int
+    incorrect_alerts: int           # alerts that are not the true match
 
 
 def notification_metrics(queries: list[RankedQuery], threshold: float) -> NotificationMetrics:
@@ -116,4 +117,5 @@ def notification_metrics(queries: list[RankedQuery], threshold: float) -> Notifi
         missed_notification_rate=(missed / len(with_truth)) if with_truth else 0.0,
         alert_burden=incorrect_alerts / n_queries,
         alerts_total=alerts_total,
+        incorrect_alerts=incorrect_alerts,
     )
